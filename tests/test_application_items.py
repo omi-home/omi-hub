@@ -17,11 +17,11 @@ class FakeGh:
     def __init__(self):
         self.issues, self.notes, self.assigned = {}, {}, []
 
-    def add(self, n, type_, status, parent=None, state="OPEN", prs=(), body=""):
+    def add(self, n, type_, status, parent=None, state="OPEN", prs=(), body="", labels=()):
         self.issues[n] = {"number": n, "id": f"N{n}", "title": f"#{n}", "type": type_, "status": status,
                           "parent": parent, "state": state, "state_reason": None, "prs": list(prs),
                           "body": body, "rework_count": 0, "blocked_reason": None,
-                          "open_blockers": 0, "milestone": "v1"}
+                          "open_blockers": 0, "milestone": "v1", "labels": list(labels)}
 
     def issue_snapshot(self, cfg, n):
         s = dict(self.issues[n], item_id=f"I{n}")

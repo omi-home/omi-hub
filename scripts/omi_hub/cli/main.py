@@ -3,7 +3,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from omi_hub.application import audit, items, plans, setup, views
+from omi_hub.application import audit, items, pipeline, plans, setup, views
 from omi_hub.application.workspace import load_cfg
 from omi_hub.config import load_templates, load_workflow
 from omi_hub.domain.errors import RuleError
@@ -63,6 +63,16 @@ def build_parser():
     p.add_argument("--approve", action="store_true")
     p = sub.add_parser("audit")
     p.add_argument("--fix", action="store_true")
+    p = sub.add_parser("plan-show")
+    p.add_argument("plan")
+    for name in ("context", "submit", "qa", "accept", "pr-lint"):
+        sub.add_parser(name).add_argument("number", type=_num)
+    p = sub.add_parser("start")
+    p.add_argument("number", type=_num, nargs="?")
+    sub.add_parser("check")
+    p = sub.add_parser("impact")
+    p.add_argument("number", type=_num)
+    p.add_argument("--post", action="store_true")
     p = sub.add_parser("template")
     p.add_argument("type")
     return ap
@@ -76,8 +86,22 @@ def run(a, wf):
     if a.cmd == "template":
         print(skeleton(load_templates(), a.type))
         return 0
+    if a.cmd == "plan-show":
+        return pipeline.plan_show(wf, a.plan)
     cfg = load_cfg()
-    if a.cmd == "new":
+    if a.cmd in ("check", "qa", "accept", "pr-lint"):
+        return {"check": lambda: pipeline.check(cfg), "qa": lambda: pipeline.qa(cfg, wf, a.number),
+                "accept": lambda: pipeline.accept(cfg, wf, a.number),
+                "pr-lint": lambda: pipeline.pr_lint(cfg, a.number)}[a.cmd]()
+    if a.cmd == "context":
+        pipeline.context(cfg, a.number)
+    elif a.cmd == "start":
+        pipeline.start(cfg, wf, a.number)
+    elif a.cmd == "submit":
+        pipeline.submit(cfg, wf, a.number)
+    elif a.cmd == "impact":
+        pipeline.impact(cfg, a.number, a.post)
+    elif a.cmd == "new":
         body = (Path(a.body_file).read_text(encoding="utf-8") if a.body_file else
                 fill(load_templates(), a.type, dict(f.split("=", 1) for f in a.field)))
         items.new_item(cfg, wf, a.type, a.title, a.parent, a.affects, a.milestone, a.priority, a.estimate, body)
@@ -108,6 +132,6 @@ def main(argv=None):
     a = build_parser().parse_args(argv)
     try:
         return run(a, load_workflow())
-    except (RuleError, GhError) as e:
+    except (RuleError, GhError, OSError, ValueError) as e:  # ValueError gồm JSONDecodeError (plan hỏng)
         print(f"❌ {e}", file=sys.stderr)
         return 2
