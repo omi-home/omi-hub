@@ -75,6 +75,12 @@ def build_parser():
     p.add_argument("--post", action="store_true")
     p = sub.add_parser("template")
     p.add_argument("type")
+    p = sub.add_parser("status")
+    p.add_argument("--milestone")
+    sub.add_parser("resume")
+    p = sub.add_parser("review-done")
+    p.add_argument("number", type=_num)
+    p.add_argument("--fail", help="blocker gộp ≤ 3 dòng → rework")
     return ap
 
 
@@ -101,6 +107,12 @@ def run(a, wf):
         pipeline.submit(cfg, wf, a.number)
     elif a.cmd == "impact":
         pipeline.impact(cfg, a.number, a.post)
+    elif a.cmd == "status":
+        print(views.status(cfg, wf, a.milestone))
+    elif a.cmd == "resume":
+        pipeline.resume(cfg, wf)
+    elif a.cmd == "review-done":
+        pipeline.review_done(cfg, wf, a.number, a.fail)
     elif a.cmd == "new":
         body = (Path(a.body_file).read_text(encoding="utf-8") if a.body_file else
                 fill(load_templates(), a.type, dict(f.split("=", 1) for f in a.field)))
