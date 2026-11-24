@@ -90,7 +90,13 @@ def comments(cfg, n):
 
 
 def close(cfg, n, reason):
-    client.rest("PATCH", f"{client.repo_path(cfg)}/issues/{n}", {"state": "closed", "state_reason": reason})
+    path = f"{client.repo_path(cfg)}/issues/{n}"
+    try:
+        client.rest("PATCH", path, {"state": "closed", "state_reason": reason})
+    except client.GhError:
+        # workflow "Auto-close issue" của Project có thể đã đóng issue ngay khi Status → Done (PATCH trả 422)
+        if (client.rest("GET", path) or {}).get("state") != "closed":
+            raise
 
 
 def assign_self(cfg, n):
