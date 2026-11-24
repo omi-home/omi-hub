@@ -127,7 +127,7 @@ Cơ chế GitHub dùng:
 
 ### 3.6 Template chuẩn cho từng loại
 
-Nguồn duy nhất: `scripts/templates.json`. Từ đó script **sinh** issue forms (`.github/ISSUE_TEMPLATE/<type>.yml`), **in khung** (`template <type>`) và **kiểm tra** title + body khi `new`, `apply`, `plan-show`. Sửa template = sửa một file JSON, chạy lại `init` để sinh lại forms.
+Nguồn duy nhất: `scripts/omi_hub/config/templates.json`. Từ đó script **sinh** issue forms (`.github/ISSUE_TEMPLATE/<type>.yml`), **in khung** (`template <type>`) và **kiểm tra** title + body khi `new`, `apply`, `plan-show`. Sửa template = sửa một file JSON, chạy lại `init` để sinh lại forms.
 
 | Loại | Title (regex kiểm tra · ví dụ) | Mục body (★ = bắt buộc) |
 |---|---|---|
@@ -147,7 +147,7 @@ Quy tắc kiểm tra: mục bắt buộc phải có heading `### <tên>` và n�
 
 ### 3.7 Template PR
 
-Nguồn: `scripts/pr_template.json`.
+Nguồn: `scripts/omi_hub/config/pr_template.json`.
 
 - **Title**: `<title issue, gồm prefix> (#<số issue>)`, ví dụ `[Task] Thêm API POST /orders (#12)`. Squash merge dùng title này làm commit message.
 - **Body** (★ bắt buộc): ★Liên kết (`Closes #n`, Parent) · ★Thay đổi · Acceptance criteria liên quan (AC của parent ↔ test `ac<p>_<i>`) · ★Kiểm thử (checklist) · ★Security (`Không chạm security` | `Có chạm security`).
@@ -281,26 +281,29 @@ omi-hub/
     hooks.json
     guard.py              # PreToolUse + SessionStart
   scripts/
-    omi.py                # CLI (argparse) + điều phối lệnh
-    gh.py                 # subprocess gh api graphql / REST
-    rules.py              # thuần: transitions, parents, guards, rollup, audit, next, plan
-    workflow.json         # định nghĩa types/statuses/transitions/parents
-    templates.json        # template title + body chuẩn cho từng loại (mục 3.6)
+    omi.py                # entrypoint mỏng → omi_hub.cli
+    omi_hub/              # clean architecture, phụ thuộc chỉ đi vào trong
+      config/             # workflow.json, templates.json, pr_template.json + hàm nạp
+      domain/             # thuần: errors, lifecycle, rework, relations, guards, audit, planning, text
+      infrastructure/     # gh.py: subprocess gh api graphql / REST
+      application/        # use case theo nhóm lệnh
+      cli/                # argparse + in output
   templates/
     AGENTS.md
     ISSUE_TEMPLATE/{epic,user-story,fr,nfr,cr,task,bug}.yml
     workflows/omi-audit.yml
   tests/
-    test_rules.py, test_gh.py, test_cli.py, test_cli_flow.py, test_guard.py
+    test_domain_*.py, test_infrastructure_gh.py, test_cli*.py, test_guard.py
     e2e.sh
   docs/
 ```
 
 Ranh giới:
 
-- `rules.py` không I/O. Đầu vào: loại, status hiện tại, status đích, snapshot ngữ cảnh (parent, children, PR, blockers). Đầu ra: hợp lệ hay danh sách lỗi. Test được hoàn toàn bằng unittest.
-- `gh.py` là nơi duy nhất gọi `gh`. Trả về dict thuần.
-- `cli.py` ghép: đọc snapshot qua `gh.py` → hỏi `rules.py` → ghi qua `gh.py` → rollup.
+- `domain/` không I/O, không import layer khác ngoài `domain`. Đầu vào: loại, status hiện tại, status đích, snapshot ngữ cảnh (parent, children, PR, blockers). Đầu ra: hợp lệ hay danh sách lỗi. Test được hoàn toàn bằng unittest.
+- `config/` chỉ đọc file khai báo đi kèm plugin.
+- `infrastructure/gh.py` là nơi duy nhất gọi `gh`. Trả về dict thuần.
+- `application/` ghép: đọc snapshot qua `infrastructure` → hỏi `domain` → ghi qua `infrastructure` → rollup. `cli/` chỉ parse tham số và in kết quả.
 - Skills chỉ hướng dẫn Claude khi nào gọi lệnh nào; không chứa logic rule.
 
 ### 5.2 `workflow.json` (rút gọn)
@@ -329,7 +332,7 @@ Ranh giới:
 }
 ```
 
-Blocked và rework là quy tắc chung, được `rules.py` xử lý, không lặp trong từng loại. v1 dùng workflow.json đi kèm plugin; override theo repo để sau (YAGNI).
+Blocked và rework là quy tắc chung, được `domain/` xử lý, không lặp trong từng loại. v1 dùng workflow.json đi kèm plugin; override theo repo để sau (YAGNI).
 
 ### 5.3 Lệnh CLI (`OMI_CLI` = `python "<plugin>/scripts/omi.py"`, đường dẫn đầy đủ do hook SessionStart in ra)
 
@@ -423,7 +426,7 @@ Project mẫu được tạo một lần bằng `omi init --template` (tạo fie
 ### 6.2 PRD → cây item (`/omi-plan <prd>`)
 
 1. Claude đọc PRD, sinh `.omi/plans/<date>-<slug>.json`: cây node `{key, type, title, body, priority, estimate, children}`, Story/Functional Requirement/Non-Functional Requirement có acceptance criteria.
-2. `rules.py` kiểm tra quan hệ cha–con của plan trước khi trình.
+2. `domain/planning` kiểm tra quan hệ cha–con của plan trước khi trình.
 3. `plan-show` in cây (script, không để LLM tự vẽ); người duyệt; sửa theo phản hồi.
 4. `omi apply plan.json --approve`: tạo theo thứ tự cha trước con; bỏ qua node đã có `omi:key`; requirement items vào `Approved` (người đã duyệt plan = chốt baseline), Task vào `Ready`.
 
@@ -485,7 +488,7 @@ Kết quả ghi vào một issue duy nhất "OMI Audit" (tạo nếu chưa có, 
 
 ## 8. Kiểm thử
 
-- `tests/test_rules.py` (unittest stdlib): mọi transition hợp lệ/không hợp lệ theo từng loại, Blocked/unblock, rework + phanh, quan hệ cha–con, rollup, guard.
+- `tests/test_domain_*.py` (unittest stdlib): mọi transition hợp lệ/không hợp lệ theo từng loại, Blocked/unblock, rework + phanh, quan hệ cha–con, rollup, guard.
 - `tests/e2e.sh` (thủ công, sau mỗi phase): chạy trên repo sandbox của org: init → apply plan mẫu → vòng implement một Task giả → audit sạch.
 
 ## 9. Rủi ro và điểm cần spike (Phase 0)
