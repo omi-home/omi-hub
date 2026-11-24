@@ -1,0 +1,7 @@
+{
+  "name": "omi-home",
+  "owner": {"name": "omi-home"},
+  "plugins": [
+    {"name": "omi-hub", "source": "./", "description": "Quy trình dự án chuẩn trên GitHub Projects cho Claude Code."}
+  ]
+}
