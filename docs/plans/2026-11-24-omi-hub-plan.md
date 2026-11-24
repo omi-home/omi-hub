@@ -20,6 +20,7 @@
 - Field Project: `Status`, `Priority` (P0–P3), `Estimate` (number), `Rework Count` (number), `Blocked Reason` (text).
 - `max_rework` = 3. Approved luôn cần người xác nhận (hook `ask`).
 - Chỉ `AGENTS.md`, không tạo `CLAUDE.md`. Memory subagent: `memory: project`.
+- **Mô hình workspace (spec D12):** `AGENTS.md`, `.claude/`, `.omi/` nằm ở thư mục workspace; repo git là thư mục con (`repo_dir` trong `.omi/project.json`). Không ghi file agent/omi vào repo; repo chỉ nhận `.github/` (issue forms, PR template, workflow). Mọi lệnh git/gh cần working copy chạy với `cwd = repo_dir`.
 - Đọc/ghi file luôn `encoding="utf-8"` (chạy trên Windows).
 - Chạy test từ thư mục `omi-hub/`: `python -m unittest discover -s tests -v`.
 - Không xóa issue; không tự đóng milestone; không ghi đè body issue của người dùng (trừ khi tạo mới).
@@ -47,7 +48,9 @@
 
 ### Task 001: Xác minh API GitHub và cơ chế plugin
 
-Mục tiêu: xác nhận các giả định ở spec mục 9 trước khi viết code. Kết quả là `docs/spike-results.md`; mọi lệnh ở đây là thử nghiệm, không giữ lại code.
+Mục tiêu: xác nhận các giả định ở spec mục 9 trước khi viết code.
+
+> **Đã xác minh khi khởi tạo omi-hub (2026-11-24, Project #8):** tạo Issue Type tên dài có dấu cách ✓; tạo issue với `type` qua REST ✓; `POST sub_issues` ✓; `updateProjectV2Field` đặt 10 option Status cho Project rỗng ✓; `gh project field-list` **không** trả field Type (mục 6 — kiểm trên UI); gắn sub-issue cho item đã có trong Project → GitHub **tự thêm** vào Project (bất đồng bộ), `addProjectV2ItemById` lỗi `Content already exists` (xử lý ở Task 007 `add_to_project`). Các bước dưới vẫn chạy đủ trên sandbox để ghi kết quả. Kết quả là `docs/spike-results.md`; mọi lệnh ở đây là thử nghiệm, không giữ lại code.
 
 **Files:**
 - Create: `docs/spike-results.md`
@@ -1227,7 +1230,7 @@ Sửa `validate_plan` (Task 005): đổi chữ ký thành `def validate_plan(wf,
   - `gh.FIELD_KINDS: dict[str, "single"|"number"|"text"]`, `gh.AUDIT_TITLE = "OMI Audit"`.
   - `gh.normalize_issue(raw: dict, project_id: str) -> dict` → snapshot với khóa: `id, number, title, body, type, state, state_reason, milestone, labels (list[str]), item_id, status, rework_count, blocked_reason, parent, children (mỗi con: number, title, type, state, status), open_blockers, prs`.
   - `gh.issue_snapshot(cfg, number) -> dict`, `gh.normalize_project_item(node: dict) -> dict|None`, `gh.project_items(cfg) -> list[dict]`.
-  - `gh.set_field(cfg, item_id, field, value)`, `gh.clear_field(cfg, item_id, field)`, `gh.add_to_project(cfg, node_id) -> str`.
+  - `gh.set_field(cfg, item_id, field, value)`, `gh.clear_field(cfg, item_id, field)`, `gh.find_item(cfg, node_id) -> str|None`, `gh.add_to_project(cfg, node_id) -> str` (chịu được việc GitHub tự thêm sub-issue). `gh.run(args, input=None, cwd=None)`.
   - `cfg` = nội dung `.omi/project.json`: `{"owner","repo","project_number","project_id","fields": {name: {"id", "options"?: {optName: optId}}}}`.
 
 - [ ] **Step 1: Viết test thất bại `tests/test_gh.py`**
@@ -1318,6 +1321,12 @@ class TestSetField(unittest.TestCase):
             gh.set_field(CFG, "ITEM", "Blocked Reason", "chờ")
             self.assertEqual(g.call_args.kwargs["value"], {"text": "chờ"})
 
+    def test_add_to_project_when_github_auto_added(self):
+        with mock.patch.object(gh, "graphql", side_effect=[
+                gh.GhError("Content already exists in this project"),
+                {"node": {"projectItems": {"nodes": [{"id": "ITEM9", "project": {"id": PID}}]}}}]):
+            self.assertEqual(gh.add_to_project(CFG, "I_9"), "ITEM9")
+
     def test_unknown_option(self):
         with self.assertRaisesRegex(gh.GhError, "không có option"):
             gh.set_field(CFG, "ITEM", "Status", "Nope")
@@ -1352,6 +1361,7 @@ Nếu Task 001 ghi nhận tên field GraphQL khác, sửa query ở đây cho kh
 import json
 import re
 import subprocess
+import time
 
 FIELD_KINDS = {"Status": "single", "Priority": "single", "Estimate": "number",
                "Rework Count": "number", "Blocked Reason": "text"}
@@ -1367,8 +1377,8 @@ class GhError(Exception):
     pass
 
 
-def run(args, input=None):
-    p = subprocess.run(["gh", *args], input=input, capture_output=True, text=True, encoding="utf-8")
+def run(args, input=None, cwd=None):
+    p = subprocess.run(["gh", *args], input=input, capture_output=True, text=True, encoding="utf-8", cwd=cwd)
     if p.returncode != 0:
         msg = (p.stderr or p.stdout).strip()
         hint = next((h for k, h in HINTS if k in msg.lower()), "")
@@ -1541,8 +1551,28 @@ def clear_field(cfg, item_id, field):
     graphql(CLEAR_FIELD, project=cfg["project_id"], item=item_id, field=cfg["fields"][field]["id"])
 
 
+FIND_ITEM = """query($id: ID!) { node(id: $id) { ... on Issue {
+  projectItems(first: 10) { nodes { id project { id } } } } } }"""
+
+
+def find_item(cfg, node_id):
+    nodes = graphql(FIND_ITEM, id=node_id)["node"]["projectItems"]["nodes"]
+    return next((x["id"] for x in nodes if x["project"]["id"] == cfg["project_id"]), None)
+
+
 def add_to_project(cfg, node_id):
-    return graphql(ADD_ITEM, project=cfg["project_id"], content=node_id)["addProjectV2ItemById"]["item"]["id"]
+    """GitHub tự thêm sub-issue của item đã trong Project (bất đồng bộ) → add báo 'already exists': tìm lại item."""
+    for _ in range(6):
+        try:
+            return graphql(ADD_ITEM, project=cfg["project_id"], content=node_id)["addProjectV2ItemById"]["item"]["id"]
+        except GhError as e:
+            if "already exists" not in str(e):
+                raise
+        item = find_item(cfg, node_id)
+        if item:
+            return item
+        time.sleep(2)
+    raise GhError(f"Không lấy được item Project cho {node_id}")
 ```
 
 - [ ] **Step 4: Chạy test** — Run: `python -m unittest discover -s tests -v` — Expected: PASS.
@@ -1571,7 +1601,7 @@ git commit -m "feat(gh): wrapper gh, snapshot issue, project items, ghi field"
 - Produces:
   - Issue: `create_issue(cfg, title, body, type_, milestone=None) -> dict` (REST issue: `number`, `id` số, `node_id`), `issue_db_id(cfg, n) -> int`, `add_sub_issue(cfg, parent_n, child_db_id)`, `add_blocked_by(cfg, n, blocker_db_id)`, `comment(cfg, n, body)`, `comments(cfg, n) -> list[str]`, `close(cfg, n, reason: "completed"|"not_planned")`, `assign_self(cfg, n)`, `existing_keys(cfg) -> dict[str, int]`, `repo_issues(cfg) -> list[{"number","title","state"}]`, `upsert_audit_issue(cfg, body: str|None)`.
   - Milestone: `milestone_number(cfg, title) -> int`, `ensure_milestone(cfg, title) -> int`, `set_milestone(cfg, n, title)`.
-  - Bootstrap: `current_repo() -> (owner, repo)`, `ensure_issue_types(org, names)`, `find_project(owner, title) -> int|None`, `create_project(owner, title) -> int`, `copy_project(owner, source, title) -> int`, `project_node_id(owner, number) -> str`, `default_branch(owner, repo) -> str`, `ensure_label(cfg, name)`, `link_project(owner, number, repo_full)`, `ensure_fields(owner, number, wf)`, `load_fields(owner, number) -> dict`.
+  - Bootstrap: `current_repo(cwd=None) -> (owner, repo)`, `set_variable(cfg, name, value)`, `ensure_issue_types(org, names)`, `find_project(owner, title) -> int|None`, `create_project(owner, title) -> int`, `copy_project(owner, source, title) -> int`, `project_node_id(owner, number) -> str`, `default_branch(owner, repo) -> str`, `ensure_label(cfg, name)`, `link_project(owner, number, repo_full)`, `ensure_fields(owner, number, wf)`, `load_fields(owner, number) -> dict`.
 
 - [ ] **Step 1: Thêm vào `scripts/gh.py`**
 
@@ -1668,9 +1698,13 @@ UPDATE_STATUS = """mutation($field: ID!, $options: [ProjectV2SingleSelectFieldOp
     projectV2Field { ... on ProjectV2SingleSelectField { id } } } }"""
 
 
-def current_repo():
-    d = json.loads(run(["repo", "view", "--json", "owner,name"]))
+def current_repo(cwd=None):
+    d = json.loads(run(["repo", "view", "--json", "owner,name"], cwd=cwd))
     return d["owner"]["login"], d["name"]
+
+
+def set_variable(cfg, name, value):
+    run(["variable", "set", name, "-R", _repo(cfg), "--body", value])
 
 
 def ensure_issue_types(org, names):
@@ -1757,7 +1791,7 @@ def load_fields(owner, number):
 - [ ] **Step 3: Smoke test trên sandbox** (từ clone `omi-sandbox`)
 
 ```bash
-python -c "import sys; sys.path.insert(0,r'<omi-hub>/scripts'); import gh; print(gh.current_repo()); print(len(gh.repo_issues({'owner':'omi-home','repo':'omi-sandbox'})))"
+python -c "import sys; sys.path.insert(0,r'<omi-hub>/scripts'); import gh; print(gh.current_repo('omi-sandbox')); print(len(gh.repo_issues({'owner':'omi-home','repo':'omi-sandbox'})))"
 ```
 Expected: `('omi-home', 'omi-sandbox')` và một số ≥ 2.
 
@@ -1823,6 +1857,7 @@ if __name__ == "__main__":
 """omi — CLI quản lý work item trên GitHub Projects theo workflow omi-hub."""
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
@@ -1886,7 +1921,7 @@ def merge_agents_md(existing, section):
 
 **Interfaces:**
 - Consumes: `rules.*` (Task 002–005), `gh.*` (Task 007–008), helper Task 009.
-- Produces: `omi.load_cfg() -> dict`, `omi.snapshot(cfg, n) -> dict` (bắt buộc đã vào Project), `omi.apply_status(cfg, wf, snap, target, reason=None)`, `omi.rollup_up(cfg, wf, snap, trigger)`, `omi.cmd_new(cfg, wf, type_, title, parent=None, affects=(), milestone=None, priority=None, estimate=None, body="", key=None, status=None) -> int`, `omi.cmd_move(cfg, wf, n, target, reason=None)`, `omi.cmd_rework(cfg, wf, n, reason) -> str`, `omi.cmd_block(cfg, wf, n, reason=None, by=None)`, `omi.cmd_unblock(cfg, wf, n)`, `omi.cmd_tree(cfg, n=None)`, `omi.cmd_next(cfg, wf)`, `omi.main(argv=None) -> int`.
+- Produces: `omi.find_root(start=None) -> Path|None`, `omi.load_cfg() -> dict` (thêm `_root`, đặt `TMP` = `<workspace>/.omi/tmp`), `omi.repo_dir(cfg) -> Path`, `omi.snapshot(cfg, n) -> dict` (bắt buộc đã vào Project), `omi.apply_status(cfg, wf, snap, target, reason=None)`, `omi.rollup_up(cfg, wf, snap, trigger)`, `omi.cmd_new(cfg, wf, type_, title, parent=None, affects=(), milestone=None, priority=None, estimate=None, body="", key=None, status=None) -> int`, `omi.cmd_move(cfg, wf, n, target, reason=None)`, `omi.cmd_rework(cfg, wf, n, reason) -> str`, `omi.cmd_block(cfg, wf, n, reason=None, by=None)`, `omi.cmd_unblock(cfg, wf, n)`, `omi.cmd_tree(cfg, n=None)`, `omi.cmd_next(cfg, wf)`, `omi.main(argv=None) -> int`.
 
 - [ ] **Step 1: Viết test luồng với GitHub giả `tests/test_cli_flow.py`**
 
@@ -2042,10 +2077,30 @@ if __name__ == "__main__":
 
 ```python
 # ---------- điều phối ----------
+def find_root(start=None):
+    """Thư mục workspace chứa .omi/project.json, tìm từ start (mặc định cwd) lên trên."""
+    p = Path(start or Path.cwd()).resolve()
+    return next((d for d in (p, *p.parents) if (d / ".omi" / "project.json").exists()), None)
+
+
 def load_cfg():
-    if not CONFIG.exists():
-        raise RuleError("Chưa có .omi/project.json — chạy OMI_CLI init trước")
-    return json.loads(CONFIG.read_text(encoding="utf-8"))
+    """Cấu hình ở workspace (spec D12); trong CI repo không có .omi/ nên đọc biến OMI_CONFIG."""
+    global TMP
+    root = find_root()
+    if root:
+        cfg = json.loads((root / ".omi" / "project.json").read_text(encoding="utf-8"))
+    elif os.environ.get("OMI_CONFIG"):
+        root, cfg = Path.cwd(), json.loads(os.environ["OMI_CONFIG"])
+        cfg["repo_dir"] = "."  # CI: cwd chính là repo
+    else:
+        raise RuleError("Không thấy .omi/project.json của workspace — chạy `OMI_CLI init --repo-dir <repo>` từ workspace")
+    cfg["_root"] = str(root)
+    TMP = root / ".omi" / "tmp"
+    return cfg
+
+
+def repo_dir(cfg):
+    return Path(cfg.get("_root", ".")) / cfg.get("repo_dir", ".")
 
 
 def snapshot(cfg, n):
@@ -2232,6 +2287,7 @@ def main(argv=None):
     p.add_argument("--test-cmd")
     p.add_argument("--lint-cmd")
     p.add_argument("--accept-cmd")
+    p.add_argument("--repo-dir", default=".", help="repo git, tương đối với workspace (cwd)")
     p = sub.add_parser("new")
     p.add_argument("type")
     p.add_argument("title")
@@ -2281,7 +2337,7 @@ def main(argv=None):
     try:
         if a.cmd == "init":
             cmd_init(wf, a.milestone, a.from_template, a.template_only, a.hub_repo,
-                     a.test_cmd, a.lint_cmd, a.accept_cmd)
+                     a.test_cmd, a.lint_cmd, a.accept_cmd, a.repo_dir)
             return 0
         if a.cmd == "plan-show":
             return cmd_plan_show(wf, a.plan)
@@ -2344,22 +2400,56 @@ if __name__ == "__main__":
 
 **Interfaces:**
 - Consumes: `gh` bootstrap (Task 008), `merge_agents_md` (Task 009), `rules.load_templates` (Task 006).
-- Produces: `omi.render_form(type_, t) -> str`, `omi.form_filename(type_) -> str`, `omi.render_pr_template(pr_tpl) -> str`, `omi.write_templates(hub_repo: str, dest: Path = Path(".")) -> None`, `omi.cmd_init(wf, milestone=None, from_template=None, template_only=False, hub_repo="omi-home/omi-hub", test_cmd=None, lint_cmd=None, accept_cmd=None) -> None`. File đích: `.github/ISSUE_TEMPLATE/*.yml`, `.github/workflows/omi-audit.yml`, `AGENTS.md`, `.github/pull_request_template.md`, `.omi/project.json` (thêm `commands`, `security_paths`, `review_max_diff_lines`), `.omi/.gitignore` (`tmp/`).
+- Produces: `omi.render_form(type_, t) -> str`, `omi.form_filename(type_) -> str`, `omi.render_pr_template(pr_tpl) -> str`, `omi.write_templates(hub_repo: str, repo: Path, workspace: Path) -> None`, `omi.cmd_init(wf, milestone=None, from_template=None, template_only=False, hub_repo="omi-home/omi-hub", test_cmd=None, lint_cmd=None, accept_cmd=None, repo_dir_=".") -> None`. Repo nhận: `.github/ISSUE_TEMPLATE/*.yml`, `.github/pull_request_template.md`, `.github/workflows/omi-audit.yml`. Workspace nhận: `AGENTS.md`, `.omi/project.json` (gồm `repo_dir`, `commands`, `security_paths`, `review_max_diff_lines`, `default_branch`). Repo variable `OMI_CONFIG` = nội dung config (cho Action).
 
 - [ ] **Step 1: Thêm test vào `tests/test_cli.py`**
 
 ```python
-import tempfile  # đặt cùng nhóm import ở đầu file
+import os  # các import này đặt cùng nhóm import ở đầu file
+import tempfile
+from unittest import mock
+
+
+class TestConfig(unittest.TestCase):
+    def test_find_root_walks_up_and_repo_dir(self):
+        with tempfile.TemporaryDirectory() as d:
+            ws = Path(d)
+            (ws / ".omi").mkdir()
+            (ws / ".omi" / "project.json").write_text('{"repo_dir": "app"}', encoding="utf-8")
+            (ws / "app" / "src").mkdir(parents=True)
+            self.assertEqual(omi.find_root(ws / "app" / "src"), ws.resolve())
+            old = os.getcwd()
+            os.chdir(ws / "app" / "src")
+            try:
+                cfg = omi.load_cfg()
+            finally:
+                os.chdir(old)
+            self.assertEqual(omi.repo_dir(cfg).resolve(), (ws / "app").resolve())
+            self.assertEqual(omi.TMP, ws.resolve() / ".omi" / "tmp")
+
+    def test_env_fallback_in_ci(self):
+        with tempfile.TemporaryDirectory() as d, mock.patch.dict(os.environ, {"OMI_CONFIG": '{"owner": "o"}'}):
+            old = os.getcwd()
+            os.chdir(d)
+            try:
+                cfg = omi.load_cfg()
+            finally:
+                os.chdir(old)
+            self.assertEqual((cfg["owner"], cfg["repo_dir"]), ("o", "."))
 
 
 class TestWriteTemplates(unittest.TestCase):
     def test_writes_and_merges(self):
         with tempfile.TemporaryDirectory() as d:
-            dest = Path(d)
-            (dest / "AGENTS.md").write_text("# Dự án X\n", encoding="utf-8")
-            omi.write_templates("acme/omi-hub", dest)
-            omi.write_templates("acme/omi-hub", dest)  # chạy lại không nhân đôi
-            agents = (dest / "AGENTS.md").read_text(encoding="utf-8")
+            ws = Path(d)
+            dest = ws / "app"  # repo là thư mục con của workspace
+            dest.mkdir()
+            (ws / "AGENTS.md").write_text("# Dự án X\n", encoding="utf-8")
+            omi.write_templates("acme/omi-hub", dest, ws)
+            omi.write_templates("acme/omi-hub", dest, ws)  # chạy lại không nhân đôi
+            agents = (ws / "AGENTS.md").read_text(encoding="utf-8")
+            self.assertFalse((dest / "AGENTS.md").exists())
+            self.assertFalse((dest / ".omi").exists())
             self.assertTrue(agents.startswith("# Dự án X"))
             self.assertEqual(agents.count(omi.BEGIN), 1)
             forms = sorted(p.name for p in (dest / ".github/ISSUE_TEMPLATE").glob("*.yml"))
@@ -2369,7 +2459,6 @@ class TestWriteTemplates(unittest.TestCase):
             wf = (dest / ".github/workflows/omi-audit.yml").read_text(encoding="utf-8")
             self.assertIn("repository: acme/omi-hub", wf)
             self.assertNotIn("__OMI_HUB_REPO__", wf)
-            self.assertEqual((dest / ".omi/.gitignore").read_text(encoding="utf-8"), "tmp/\n")
             pr_md = (dest / ".github/pull_request_template.md").read_text(encoding="utf-8")
             self.assertIn("### Liên kết", pr_md)
             self.assertIn("### Security", pr_md)
@@ -2397,6 +2486,7 @@ Ngắn có chủ đích (nạp vào mọi phiên); luật chi tiết nằm trong
 <!-- omi:begin -->
 ## omi-hub
 Dự án quản lý bằng omi-hub (GitHub Project). `OMI_CLI` = lệnh ở dòng `OMI_CLI:` đầu phiên. CLI tự kiểm luật và in lý do khi từ chối.
+- **Script-first (ưu tiên hàng đầu với mọi yêu cầu):** trước tiên tìm lệnh `OMI_CLI`/script làm được; LLM chỉ làm việc cần phán đoán; việc lặp lại chưa có script → đề xuất viết script trước.
 - Đổi status chỉ qua `OMI_CLI move|rework|block|unblock` (không `gh issue close`, `gh project item-edit`).
 - `Approved` chỉ khi người dùng xác nhận.
 - Lỗi khi đang làm → `rework`; lỗi trên item đã Done → `new Bug --affects`; đổi yêu cầu đã Approved → skill omi-change.
@@ -2490,6 +2580,7 @@ jobs:
       - run: python .omi-hub/scripts/omi.py audit --fix
         env:
           GH_TOKEN: ${{ secrets.OMI_PROJECT_TOKEN }}
+          OMI_CONFIG: ${{ vars.OMI_CONFIG }}
   pr-lint:
     if: github.event_name == 'pull_request' && github.event.action != 'closed'
     runs-on: ubuntu-latest
@@ -2503,6 +2594,7 @@ jobs:
       - run: python .omi-hub/scripts/omi.py pr-lint ${{ github.event.pull_request.number }}
         env:
           GH_TOKEN: ${{ secrets.OMI_PROJECT_TOKEN }}
+          OMI_CONFIG: ${{ vars.OMI_CONFIG }}
 ```
 
 - [ ] **Step 6: Viết `docs/views.md`**
@@ -2530,30 +2622,30 @@ Sau đó dự án mới dùng: `OMI_CLI init` với `--from-template <số proje
 - [ ] **Step 7: Thêm `write_templates` và `cmd_init` vào `scripts/omi.py` (trước `def _num`)**
 
 ```python
-def write_templates(hub_repo, dest=Path(".")):
-    forms = dest / ".github" / "ISSUE_TEMPLATE"
+def write_templates(hub_repo, repo=Path("."), workspace=Path(".")):
+    """Repo chỉ nhận `.github/` (GitHub bắt buộc nằm trong repo); AGENTS.md ghi ra workspace (spec D12)."""
+    forms = repo / ".github" / "ISSUE_TEMPLATE"
     forms.mkdir(parents=True, exist_ok=True)
     (forms / "config.yml").write_text((TEMPLATES / "ISSUE_TEMPLATE" / "config.yml").read_text(encoding="utf-8"),
                                       encoding="utf-8")
     for type_, t in rules.load_templates().items():
         (forms / form_filename(type_)).write_text(render_form(type_, t), encoding="utf-8")
-    (dest / ".github" / "pull_request_template.md").write_text(render_pr_template(rules.load_pr_template()),
+    (repo / ".github" / "pull_request_template.md").write_text(render_pr_template(rules.load_pr_template()),
                                                                 encoding="utf-8")
-    wfdir = dest / ".github" / "workflows"
+    wfdir = repo / ".github" / "workflows"
     wfdir.mkdir(parents=True, exist_ok=True)
     audit = (TEMPLATES / "workflows" / "omi-audit.yml").read_text(encoding="utf-8")
     (wfdir / "omi-audit.yml").write_text(audit.replace("__OMI_HUB_REPO__", hub_repo), encoding="utf-8")
-    agents = dest / "AGENTS.md"
+    agents = workspace / "AGENTS.md"
     old = agents.read_text(encoding="utf-8") if agents.exists() else ""
     agents.write_text(merge_agents_md(old, (TEMPLATES / "AGENTS.md").read_text(encoding="utf-8")),
                       encoding="utf-8")
-    (dest / ".omi").mkdir(exist_ok=True)
-    (dest / ".omi" / ".gitignore").write_text("tmp/\n", encoding="utf-8")
 
 
 def cmd_init(wf, milestone=None, from_template=None, template_only=False, hub_repo="omi-home/omi-hub",
-             test_cmd=None, lint_cmd=None, accept_cmd=None):
-    owner, repo = gh.current_repo()
+             test_cmd=None, lint_cmd=None, accept_cmd=None, repo_dir_="."):
+    """Chạy từ thư mục workspace; repo_dir_ = đường dẫn repo git tương đối với workspace."""
+    owner, repo = gh.current_repo(cwd=repo_dir_)
     gh.ensure_issue_types(owner, list(wf["types"]))
     title = "OMI Template" if template_only else f"{repo} — omi"
     number = gh.find_project(owner, title)
@@ -2566,7 +2658,7 @@ def cmd_init(wf, milestone=None, from_template=None, template_only=False, hub_re
     gh.link_project(owner, number, f"{owner}/{repo}")
     old = json.loads(CONFIG.read_text(encoding="utf-8")) if CONFIG.exists() else {}
     new_cmds = {"test": test_cmd, "lint": lint_cmd, "accept": accept_cmd}
-    cfg = {"owner": owner, "repo": repo, "project_number": number,
+    cfg = {"owner": owner, "repo": repo, "repo_dir": repo_dir_, "project_number": number,
            "project_id": gh.project_node_id(owner, number), "fields": gh.load_fields(owner, number),
            "commands": {**old.get("commands", {}), **{k: v for k, v in new_cmds.items() if v}},
            "security_paths": old.get("security_paths", DEFAULT_SECURITY),
@@ -2574,7 +2666,8 @@ def cmd_init(wf, milestone=None, from_template=None, template_only=False, hub_re
            "default_branch": gh.default_branch(owner, repo)}
     CONFIG.parent.mkdir(exist_ok=True)
     CONFIG.write_text(json.dumps(cfg, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    write_templates(hub_repo)
+    write_templates(hub_repo, Path(repo_dir_), Path("."))
+    gh.set_variable(cfg, "OMI_CONFIG", json.dumps(cfg, ensure_ascii=False))  # Action không có .omi/ của workspace
     gh.ensure_label(cfg, "security")  # label bật security review (spec 5.6)
     if milestone:
         gh.ensure_milestone(cfg, milestone)
@@ -2582,18 +2675,20 @@ def cmd_init(wf, milestone=None, from_template=None, template_only=False, hub_re
           "Việc còn lại cho người:\n"
           "  1. Tạo secret OMI_PROJECT_TOKEN (fine-grained PAT: org Projects RW; repo Issues RW;"
           f" Contents R cho {hub_repo}).\n"
-          "  2. Commit .omi/, .github/, AGENTS.md.\n"
+          "  2. Commit .github/ trong repo (AGENTS.md và .omi/ ở workspace, không commit).\n"
           + ("" if from_template else "  3. Tạo views theo docs/views.md (hoặc dùng --from-template lần sau).\n"))
 ```
 
 - [ ] **Step 8: Chạy test** — Expected: PASS.
 
-- [ ] **Step 9: Thử thật trên sandbox** (trong clone `omi-sandbox`)
+- [ ] **Step 9: Thử thật trên sandbox** (từ workspace chứa clone `omi-sandbox`)
 
 ```bash
-python <omi-hub>/scripts/omi.py init --milestone "v0.1" --test-cmd "python -m unittest" --accept-cmd "python -m unittest -k ac{n}_ -v"
-cat .omi/project.json
-python <omi-hub>/scripts/omi.py init --milestone "v0.1"   # chạy lại: không tạo trùng project/field
+# chạy từ thư mục workspace, clone sandbox nằm ở ./omi-sandbox
+python <omi-hub>/scripts/omi.py init --repo-dir omi-sandbox --milestone "v0.1" --test-cmd "python -m unittest" --accept-cmd "python -m unittest -k ac{n}_ -v"
+cat .omi/project.json && ls omi-sandbox/.github && test ! -e omi-sandbox/AGENTS.md
+python <omi-hub>/scripts/omi.py init --repo-dir omi-sandbox --milestone "v0.1"   # chạy lại: không tạo trùng
+gh variable get OMI_CONFIG -R omi-home/omi-sandbox | head -c 80
 ```
 Expected: lần 2 không lỗi, cùng `project_number`; `gh project field-list` có đủ 10 Status + 4 field.
 
@@ -2976,8 +3071,8 @@ def render_pr_body(s, parent, commits, security):
 **Interfaces:**
 - Consumes: Task 010 (`snapshot`, `cmd_move`, `cmd_rework`), Task 014.
 - Produces:
-  - gh: `issue_branches(cfg, n) -> list[str]`, `develop(cfg, n)`, `create_pr(cfg, title, body, head) -> int`, `pr_view(cfg, pr) -> tuple[str, str]`, `pr_diff(cfg, pr) -> str`, `pr_checks(cfg, pr) -> tuple[bool | None, str]` (None = PR không có CI), `merge_pr(cfg, pr)`.
-  - omi: `run_cmd(cmd: str) -> tuple[int, str]`, `cmd_context(cfg, n) -> str`, `cmd_start(cfg, wf, n=None) -> int|None`, `cmd_check(cfg) -> int`, `cmd_submit(cfg, wf, n) -> tuple[int, list[str]]` (PR, reviewers), `cmd_qa(cfg, wf, n) -> int`, `cmd_accept(cfg, wf, n) -> int`, `cmd_impact(cfg, n, post=False) -> str`, `cmd_plan_show(wf, path) -> int`, `cmd_pr_lint(cfg, pr) -> int`. `start` ghi số task vào `.omi/tmp/current`, `qa` xóa khi Done (hook SessionStart dùng file này).
+  - gh: `issue_branches(cfg, n) -> list[str]`, `develop(cfg, n, cwd=None)`, `create_pr(cfg, title, body, head) -> int`, `pr_view(cfg, pr) -> tuple[str, str]`, `pr_diff(cfg, pr) -> str`, `pr_checks(cfg, pr) -> tuple[bool | None, str]` (None = PR không có CI), `merge_pr(cfg, pr)`.
+  - omi: `run_cmd(cmd: str|list, cwd=None) -> tuple[int, str]` (lệnh git/test chạy với `cwd=repo_dir(cfg)`), `cmd_context(cfg, n) -> str`, `cmd_start(cfg, wf, n=None) -> int|None`, `cmd_check(cfg) -> int`, `cmd_submit(cfg, wf, n) -> tuple[int, list[str]]` (PR, reviewers), `cmd_qa(cfg, wf, n) -> int`, `cmd_accept(cfg, wf, n) -> int`, `cmd_impact(cfg, n, post=False) -> str`, `cmd_plan_show(wf, path) -> int`, `cmd_pr_lint(cfg, pr) -> int`. `start` ghi số task vào `.omi/tmp/current`, `qa` xóa khi Done (hook SessionStart dùng file này).
   - Dòng output (skill dựa vào): `START #n` | `NONE`; `CHECK PASS` | `CHECK FAIL (<bước>)`; `REVIEW #n PR #p pack=<file> reviewers=code[,security]|none`; `QA FAIL #n (<test|CI>) log=<file> status=<In Progress|Blocked>`; `DONE #n`; `ACCEPT PASS #p` | `ACCEPT FAIL #p: ...`; `PR OK` | `PR FAIL` + lỗi.
 
 - [ ] **Step 1: Mở rộng `FakeGh` trong `tests/test_cli_flow.py`**
@@ -3009,7 +3104,7 @@ Thêm `import re` đầu file. Thêm vào `__init__`: `self.files, self.develope
     def issue_branches(self, cfg, n):
         return self.branches.get(n, [])
 
-    def develop(self, cfg, n):
+    def develop(self, cfg, n, cwd=None):
         self.developed.append(n)
 ```
 
@@ -3050,7 +3145,7 @@ class TestPipeline(unittest.TestCase):
     def test_submit_first_time_requests_review_with_security(self):
         self.g.add(2, "User Story", "In Progress", body=AC1)
         self.g.add(3, "Task", "In Progress", parent=2)
-        def fake_run(cmd):
+        def fake_run(cmd, cwd=None):
             cmd = " ".join(cmd) if isinstance(cmd, list) else cmd
             if cmd.startswith("git diff"):
                 return 0, "src/auth/login.py\n"
@@ -3117,8 +3212,8 @@ def issue_branches(cfg, n):
     return [line.split()[0] for line in out.splitlines() if line.strip()]
 
 
-def develop(cfg, n):
-    run(["issue", "develop", str(n), "-R", _repo(cfg), "--checkout"])
+def develop(cfg, n, cwd=None):
+    run(["issue", "develop", str(n), "-R", _repo(cfg), "--checkout"], cwd=cwd)
 
 
 def create_pr(cfg, title, body, head):
@@ -3156,10 +3251,10 @@ def merge_pr(cfg, pr):
 CHECK_STEPS = ("lint", "typecheck", "scan", "test")
 
 
-def run_cmd(cmd):
+def run_cmd(cmd, cwd=None):
     """str = lệnh của dự án (qua shell); list = lệnh nội bộ như git (không qua shell, tránh injection)."""
     p = subprocess.run(cmd, shell=isinstance(cmd, str), capture_output=True, text=True,
-                       encoding="utf-8", errors="replace")
+                       encoding="utf-8", errors="replace", cwd=cwd)
     return p.returncode, (p.stdout or "") + (p.stderr or "")
 
 
@@ -3192,12 +3287,12 @@ def cmd_start(cfg, wf, n=None):
         raise RuleError(f"#{n} đang ở '{status}', không start được")
     branches = gh.issue_branches(cfg, n)
     if branches:
-        run_cmd(["git", "fetch", "origin"])
-        code, out = run_cmd(["git", "checkout", branches[0]])
+        run_cmd(["git", "fetch", "origin"], cwd=repo_dir(cfg))
+        code, out = run_cmd(["git", "checkout", branches[0]], cwd=repo_dir(cfg))
         if code:
             raise RuleError("git checkout lỗi:\n" + tail(out, 10))
     else:
-        gh.develop(cfg, n)
+        gh.develop(cfg, n, cwd=repo_dir(cfg))
     TMP.mkdir(parents=True, exist_ok=True)
     (TMP / "current").write_text(str(n), encoding="utf-8")  # hook SessionStart nạp lại context sau /clear
     print(f"START #{n}")
@@ -3208,7 +3303,7 @@ def cmd_check(cfg):
     for step in CHECK_STEPS:
         cmd = cfg.get("commands", {}).get(step)
         if cmd:
-            code, out = run_cmd(cmd)
+            code, out = run_cmd(cmd, cwd=repo_dir(cfg))
             if code:
                 print(f"CHECK FAIL ({step})\n{tail(out)}")
                 return 1
@@ -3220,18 +3315,18 @@ def cmd_submit(cfg, wf, n):
     s = snapshot(cfg, n)
     if s["status"] not in ("In Progress", "In Review"):
         raise RuleError(f"#{n} phải ở In Progress/In Review (hiện: {s['status']})")
-    code, out = run_cmd(["git", "push", "-u", "origin", "HEAD"])
+    code, out = run_cmd(["git", "push", "-u", "origin", "HEAD"], cwd=repo_dir(cfg))
     if code:
         raise RuleError("git push lỗi:\n" + tail(out, 20))
     parent = gh.issue_snapshot(cfg, s["parent"]["number"]) if s["parent"] else None
     base = f"origin/{cfg.get('default_branch', 'main')}"
-    _, files = run_cmd(["git", "diff", "--name-only", f"{base}...HEAD"])
+    _, files = run_cmd(["git", "diff", "--name-only", f"{base}...HEAD"], cwd=repo_dir(cfg))
     sec = needs_security(files.split(), s["labels"] + (parent["labels"] if parent else []), parent,
                          cfg.get("security_paths", DEFAULT_SECURITY))
     pr = _open_pr(s)
     if pr is None:  # title + body PR theo pr_template.json, do script sinh
-        _, log = run_cmd(["git", "log", "--format=%s", f"{base}..HEAD"])
-        _, head = run_cmd(["git", "rev-parse", "--abbrev-ref", "HEAD"])
+        _, log = run_cmd(["git", "log", "--format=%s", f"{base}..HEAD"], cwd=repo_dir(cfg))
+        _, head = run_cmd(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=repo_dir(cfg))
         pr = gh.create_pr(cfg, pr_title(s), render_pr_body(s, parent, log.splitlines(), sec), head.strip())
     if s["status"] == "In Progress":
         cmd_move(cfg, wf, n, "In Review")
@@ -3268,7 +3363,7 @@ def cmd_qa(cfg, wf, n):
         test = cfg.get("commands", {}).get("test")
         if not test:
             raise RuleError("PR không có CI và chưa cấu hình commands.test trong .omi/project.json")
-        code, out = run_cmd(test)
+        code, out = run_cmd(test, cwd=repo_dir(cfg))
         ok, why = code == 0, "test"
     if not ok:
         TMP.mkdir(parents=True, exist_ok=True)
@@ -3300,7 +3395,7 @@ def cmd_accept(cfg, wf, n):
         cmd = cfg.get("commands", {}).get("accept")
         if not cmd:
             raise RuleError("Chưa cấu hình commands.accept trong .omi/project.json")
-        code, out = run_cmd(cmd.format(n=n))
+        code, out = run_cmd(cmd.format(n=n), cwd=repo_dir(cfg))
     ok, missing = accept_verdict(n, acs, out, code)
     if ok:
         cmd_move(cfg, wf, n, "Done")
@@ -3458,18 +3553,24 @@ def _run(args, cwd):
     return p.stdout.strip() if p.returncode == 0 else ""
 
 
+def _find_root(cwd):
+    p = Path(cwd).resolve()
+    return next((d for d in (p, *p.parents) if (d / ".omi" / "project.json").exists()), None)
+
+
 def session_text(plugin_root, cwd, source="startup", run=_run):
     """Dòng OMI_CLI; sau startup/clear tự nạp context task đang làm (hoặc task kế tiếp) bằng script."""
     script = Path(plugin_root) / "scripts" / "omi.py"
-    ready = (Path(cwd) / ".omi" / "project.json").exists()
-    head = f'OMI_CLI: python "{script}" | ' + ("repo omi sẵn sàng" if ready else "repo chưa init (OMI_CLI init)")
-    if not ready or source not in ("startup", "clear"):
+    root = _find_root(cwd)  # workspace chứa .omi/ (spec D12)
+    head = f'OMI_CLI: python "{script}" | ' + (
+        "workspace omi sẵn sàng" if root else "chưa init (OMI_CLI init --repo-dir <repo> từ workspace)")
+    if not root or source not in ("startup", "clear"):
         return head
-    cur = Path(cwd) / ".omi" / "tmp" / "current"
+    cur = root / ".omi" / "tmp" / "current"
     if cur.exists():
-        ctx = run([sys.executable, str(script), "context", cur.read_text(encoding="utf-8").strip()], cwd)
+        ctx = run([sys.executable, str(script), "context", cur.read_text(encoding="utf-8").strip()], root)
         return f"{head}\nTASK ĐANG LÀM (tiếp tục bằng skill omi-implement, không cần chạy lại context):\n{ctx}"
-    nxt = run([sys.executable, str(script), "next"], cwd)
+    nxt = run([sys.executable, str(script), "next"], root)
     return f"{head}\nNEXT: {nxt}" if nxt else head
 
 
@@ -3734,11 +3835,12 @@ description: Phân rã PRD thành plan JSON omi (Epic → Story/Functional Requi
 
 ```bash
 #!/usr/bin/env bash
-# E2E trên repo sandbox thuộc org. Chạy trong clone của sandbox (repo trống, đã có remote).
+# E2E trên repo sandbox thuộc org, mô hình workspace: chạy trong thư mục workspace,
+# clone sandbox (repo trống, đã có remote) nằm ở ./repo.
 # Dùng: bash <omi-hub>/tests/e2e.sh <omi-hub>
 set -euo pipefail
 OMI="python $1/scripts/omi.py"
-$OMI init --milestone "e2e" \
+$OMI init --repo-dir repo --milestone "e2e" \
   --test-cmd "python -c \"import os,sys; sys.exit(not os.path.exists('e2e.txt'))\"" \
   --accept-cmd "python -c \"print('test_ac{n}_1 ok')\""
 
@@ -3759,7 +3861,8 @@ if $OMI new Task "x" --parent 1 2>/dev/null; then echo "template FAIL: title sai
 
 E=$($OMI tree | grep "Kiểm thử e2e omi" | sed -E 's/^ *#([0-9]+).*/\1/')
 T=$($OMI start | grep -oE 'START #[0-9]+' | grep -oE '[0-9]+')
-echo ok > e2e.txt && git add e2e.txt && git commit -m "#$T: e2e"
+echo ok > repo/e2e.txt && git -C repo add e2e.txt && git -C repo commit -m "#$T: e2e"
+test ! -e repo/AGENTS.md && test ! -e repo/.omi             # file agent/omi không lọt vào repo
 $OMI check | grep -q "CHECK PASS"
 SUB=$($OMI submit "$T"); echo "$SUB" | grep -q "reviewers=code"
 PR=$(echo "$SUB" | grep -oE 'PR #[0-9]+' | grep -oE '[0-9]+')
@@ -3773,7 +3876,7 @@ $OMI tree "$E" | grep -q "Kiểm thử e2e omi — Done" && echo "rollup OK"
 $OMI audit && echo "audit OK"
 ```
 
-- [ ] **Step 2: Chạy e2e** — Run: `bash <omi-hub>/tests/e2e.sh <omi-hub>` trong clone sandbox — Expected: in `rollup OK`, `audit OK`; trên GitHub Task có `Rework Count = 1`, issue có đủ các mục template.
+- [ ] **Step 2: Chạy e2e** — Run: `bash <omi-hub>/tests/e2e.sh <omi-hub>` trong thư mục workspace có clone sandbox ở `./repo` — Expected: in `rollup OK`, `audit OK`; trên GitHub Task có `Rework Count = 1`, issue có đủ các mục template.
 
 - [ ] **Step 3: Viết `README.md`**
 
@@ -3796,7 +3899,7 @@ mọi việc tất định do script làm; LLM chỉ phân rã PRD, viết code,
 
 ## Dùng (`OMI_CLI` in ở dòng đầu mỗi phiên Claude Code)
 1. Một lần mỗi org: `OMI_CLI init --template-only` → tạo views theo `docs/views.md`.
-2. Mỗi dự án: `OMI_CLI init --from-template <số project mẫu> --test-cmd "..." --accept-cmd "..."`, tạo secret `OMI_PROJECT_TOKEN`.
+2. Mỗi dự án, từ thư mục workspace (repo là thư mục con): `OMI_CLI init --repo-dir <repo> --from-template <số project mẫu> --test-cmd "..." --accept-cmd "..."`, tạo secret `OMI_PROJECT_TOKEN`. `AGENTS.md`, `.claude/`, `.omi/` nằm ở workspace, không vào repo.
 3. Backlog từ PRD: skill `omi-plan`.
 4. Làm task: skill `omi-implement`; `/clear` giữa các task.
 5. Change Request/Bug: skill `omi-change`.

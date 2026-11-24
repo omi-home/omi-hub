@@ -30,7 +30,8 @@ Ngoài phạm vi v1: tài khoản cá nhân (không có Issue Types), một Proj
 | D7 | Chốt baseline (`Approved`) cho Epic/Story/Functional Requirement/Non-Functional Requirement/Change Request **luôn do người** | Baseline là cam kết; Change Request chỉ có nghĩa khi baseline do người chốt |
 | D8 | `AGENTS.md` là file hướng dẫn agent duy nhất (Claude Code nạp trực tiếp), **không** tạo `CLAUDE.md` | Theo yêu cầu |
 | D9 | Memory dùng cơ chế gốc: subagent `memory: project` → `.claude/agent-memory/<agent>/` | Không tự chế memory |
-| D10 | **Tối ưu token: việc gì script làm được thì không dùng LLM** (mục 2.1) | Theo yêu cầu |
+| D10 | **Script-first, ưu tiên hàng đầu với mọi yêu cầu mới: việc gì script làm được thì không dùng LLM** (mục 2.1) | Theo yêu cầu; tối ưu token |
+| D12 | **Mô hình workspace**: `AGENTS.md`, `.claude/`, `.omi/` ở thư mục workspace; repo git là thư mục con, chỉ chứa code/docs/`.github/` (mục 5.4) | Tách công cụ agent khỏi mã sản phẩm |
 | D11 | **Phiên chính tự viết code và tự sửa** (không tách subagent viết code). Ngữ cảnh mới mỗi task bằng `/clear` + `context N` | Tách vai trò làm mất ngữ cảnh ở mỗi lần chuyển việc → đọc lại codebase, review không hội tụ, rework dây chuyền; thực tế tốn quota hơn |
 
 ### 2.1 Phân bổ LLM và script
@@ -354,16 +355,32 @@ Blocked và rework là quy tắc chung, được `rules.py` xử lý, không l�
 
 Lỗi: in thông điệp rõ ràng (vì sao không hợp lệ, cần làm gì), exit code ≠ 0. Không có lệnh ghi một phần mà không báo.
 
-### 5.4 Cấu hình trong repo đích
+### 5.4 Cấu hình: workspace và repo (D12)
 
-- `.omi/project.json`: owner, repo, project number, project node id, field id và option id (cache để khỏi tra mỗi lần), và:
+```
+<workspace>/                 # Claude Code mở ở đây
+  AGENTS.md                  # hướng dẫn agent (init merge mục omi)
+  .claude/                   # settings, agent-memory của reviewer
+  .omi/project.json          # cấu hình omi
+  .omi/plans/, .omi/tmp/     # plan từ PRD; gói review, log QA, current
+  <repo_dir>/                # repo git — chỉ code, docs, .github/
+    .github/ISSUE_TEMPLATE/*.yml, pull_request_template.md, workflows/omi-audit.yml
+```
+
+CLI tìm `.omi/project.json` từ cwd đi lên (chạy được ở workspace hoặc trong repo); mọi lệnh git/gh cần working copy và `commands.*` chạy với `cwd = <workspace>/<repo_dir>`. Trong GitHub Action không có workspace: `init` lưu config vào repo variable `OMI_CONFIG`, CLI đọc biến này khi không tìm thấy file.
+
+**Workspace** — `.omi/project.json`: owner, repo, `repo_dir`, `default_branch`, project number, project node id, field id và option id (cache để khỏi tra mỗi lần), và:
   - `commands`: `{"lint": "...", "typecheck": "...", "scan": "gitleaks detect --no-banner && semgrep --error -q", "test": "...", "accept": "pytest -k ac{n}_ -rA"}` (lệnh shell của dự án, cái nào bỏ trống thì bỏ qua; `{n}` = số issue nghiệm thu).
   - `security_paths`: danh sách regex đường dẫn file kích hoạt security review (mặc định: auth, login, password, secret, token, crypto, permission, acl, session, `\.env`, sql).
   - `review_max_diff_lines`: cắt diff trong gói review (mặc định 1500).
-- `.omi/tmp/`: gói review, log QA (gitignored qua `.omi/.gitignore`).
+- `.omi/tmp/`: gói review, log QA, `current` (task đang làm).
 - `.omi/plans/*.json`: các plan đã sinh từ PRD (giữ làm lịch sử).
 - `AGENTS.md`: quy trình làm việc cho agent (từ template), có mục omi tóm tắt lifecycle và lệnh.
+
+**Repo** (chỉ những gì GitHub bắt buộc nằm trong repo):
+
 - `.github/ISSUE_TEMPLATE/*.yml`: issue forms, mỗi form có `type:` tương ứng.
+- `.github/pull_request_template.md`.
 - `.github/workflows/omi-audit.yml`.
 
 ### 5.5 Hooks
@@ -385,14 +402,14 @@ Không có subagent viết code (D11).
 
 ### 6.1 Bootstrap (`OMI_CLI init`, người chạy trong terminal — không cần LLM)
 
-Tham số thêm: `--test-cmd`, `--lint-cmd`, `--accept-cmd` ghi vào `commands`.
+Chạy từ thư mục workspace: `OMI_CLI init --repo-dir <repo>`. Tham số thêm: `--test-cmd`, `--lint-cmd`, `--accept-cmd` ghi vào `commands`.
 
-1. Kiểm tra: `gh auth` có scope `project, repo, admin:org`; repo thuộc org.
+1. Kiểm tra: `gh auth` có scope `project, repo, admin:org`; repo (trong `--repo-dir`) thuộc org.
 2. Tạo Issue Types còn thiếu (REST `/orgs/{org}/issue-types`).
 3. Tạo Project bằng `gh project copy` từ **Project mẫu** của org (mang theo fields, views, built-in workflows). Nếu đã có Project gắn repo với tiêu đề chuẩn → dùng lại.
 4. Link Project với repo; đảm bảo field Priority/Estimate/Rework Count/Blocked Reason và đủ option Status (tạo bù nếu thiếu).
 5. Bật built-in workflows: auto-add issue của repo, item closed → không đổi (plugin tự quản Done/Cancelled).
-6. Ghi `.omi/project.json`, `AGENTS.md` (merge mục omi nếu file đã có), issue templates, workflow audit.
+6. Workspace: ghi `.omi/project.json`, `AGENTS.md` (merge mục omi nếu file đã có). Repo: issue forms, PR template, workflow audit. Repo variable `OMI_CONFIG` = config (cho Action). Label `security`.
 7. Tùy chọn tạo milestone đầu.
 8. In checklist việc người phải làm: tạo secret `OMI_PROJECT_TOKEN`.
 
@@ -433,7 +450,7 @@ Bị Blocked (vượt rework) → dừng, báo người.
 
 ### 6.5 Audit (GitHub Action)
 
-Trigger: `issues` (opened, edited, closed, reopened, typed, milestoned), `pull_request` (closed), cron hằng ngày, `workflow_dispatch`. Checkout repo omi-hub vào `.omi-hub/` rồi chạy `python .omi-hub/scripts/omi.py audit --fix` với `OMI_PROJECT_TOKEN`.
+Trigger: `issues` (opened, edited, closed, reopened, typed, milestoned), `pull_request` (closed), cron hằng ngày, `workflow_dispatch`. Checkout repo omi-hub vào `.omi-hub/` rồi chạy `python .omi-hub/scripts/omi.py audit --fix` với `OMI_PROJECT_TOKEN` và `OMI_CONFIG: ${{ vars.OMI_CONFIG }}` (repo không có `.omi/` — D12).
 
 Action không biết status trước đó (Projects không phát event cho Actions), nên kiểm tra **bất biến của trạng thái hiện tại**:
 
@@ -470,7 +487,9 @@ Kết quả ghi vào một issue duy nhất "OMI Audit" (tạo nếu chưa có, 
 | Sub-issues API (`addSubIssue`, đọc children) | Điều kiện tiên quyết |
 | Issue dependencies API (blocked-by) | Dùng mục `### Blocked by` trong body |
 | `gh project copy` giữ views + built-in workflows | Tạo views thủ công một lần theo hướng dẫn trong docs |
-| Projects có cột Type cho issue types | Thêm field single-select `Work Item Type`, plugin đồng bộ |
+| Projects có cột Type cho issue types — **`field-list` không trả field Type** (2026-11-24); kiểm trên UI | Thêm field single-select `Work Item Type`, plugin đồng bộ |
+| ✓ 2026-11-24: tạo Issue Type tên dài; issue với `type` (REST); `POST sub_issues`; `updateProjectV2Field` options Status | — |
+| Gắn sub-issue cho item đã trong Project → GitHub **tự thêm** vào Project (bất đồng bộ), `addProjectV2ItemById` lỗi `Content already exists` (2026-11-24) | `add_to_project` bắt lỗi này, tìm lại item, thử lại |
 | Action trigger `issues: typed` | Bỏ trigger đó, dựa vào cron |
 | Issue forms hỗ trợ `type:` | Bỏ, plugin set type sau khi tạo (audit) |
 | Subagent `memory: project` ghi vào `.claude/agent-memory/` | Ghi chú memory vào AGENTS.md |
