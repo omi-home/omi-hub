@@ -3,7 +3,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from omi_hub.application import items, plans, setup, views
+from omi_hub.application import audit, items, plans, setup, views
 from omi_hub.application.workspace import load_cfg
 from omi_hub.config import load_templates, load_workflow
 from omi_hub.domain.errors import RuleError
@@ -61,6 +61,8 @@ def build_parser():
     p = sub.add_parser("apply")
     p.add_argument("plan")
     p.add_argument("--approve", action="store_true")
+    p = sub.add_parser("audit")
+    p.add_argument("--fix", action="store_true")
     p = sub.add_parser("template")
     p.add_argument("type")
     return ap
@@ -89,6 +91,8 @@ def run(a, wf):
         items.unblock(cfg, wf, a.number)
     elif a.cmd == "apply":
         plans.apply(cfg, wf, a.plan, a.approve)
+    elif a.cmd == "audit":
+        return audit.audit(cfg, wf, a.fix)
     elif a.cmd == "tree":
         print("\n".join(views.tree(cfg, a.number)))
     elif a.cmd == "next":
