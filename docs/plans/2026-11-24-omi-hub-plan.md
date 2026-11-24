@@ -34,9 +34,10 @@
 | `scripts/workflow.json` | Khai báo types, statuses, transitions, parents, requires, rollup |
 | `scripts/rules.py` | Luật thuần: transition, blocked, rework, quan hệ, guards, rollup, audit invariants, chọn next, validate plan |
 | `scripts/gh.py` | Gọi `gh`: GraphQL/REST, snapshot issue, project items, ghi field, tạo issue, bootstrap |
-| `scripts/omi.py` | CLI: init, new, move, rework, block, unblock, tree, next, apply, plan-show, audit, context, start, check, submit, qa, accept, impact; helper text thuần |
+| `scripts/omi.py` | CLI: init, new, move, rework, block, unblock, tree, next, apply, plan-show, audit, context, start, check, submit, review-done, qa, accept, impact, status, resume, template, pr-lint; helper text thuần |
 | `hooks/hooks.json`, `hooks/guard.py` | PreToolUse chặn đi tắt / hỏi khi Approved; SessionStart in `OMI_CLI` (1 dòng) |
 | `skills/omi-{plan,implement,change}/SKILL.md` | 3 việc cần LLM: phân rã PRD, vòng implement, Change Request/Bug |
+| `skills/omi-{status,resume}/SKILL.md` | Lớp mỏng gọi `status` / `resume` (logic nằm trong CLI) |
 | `agents/omi-reviewer.md`, `agents/omi-security-reviewer.md` | Code review / security review, mỗi task đúng 1 lượt (code do phiên chính viết, không có subagent viết code) |
 | `templates/AGENTS.md`, `templates/ISSUE_TEMPLATE/*.yml`, `templates/workflows/omi-audit.yml` | File ghi vào repo đích khi init |
 | `docs/views.md` | Hướng dẫn tạo 5 view trong Project mẫu |
@@ -1489,6 +1490,7 @@ query($id: ID!, $after: String) {
     nodes { id
       status: fieldValueByName(name: "Status") { ... on ProjectV2ItemFieldSingleSelectValue { name } }
       priority: fieldValueByName(name: "Priority") { ... on ProjectV2ItemFieldSingleSelectValue { name } }
+      rework: fieldValueByName(name: "Rework Count") { ... on ProjectV2ItemFieldNumberValue { number } }
       blocked: fieldValueByName(name: "Blocked Reason") { ... on ProjectV2ItemFieldTextValue { text } }
       content { ... on Issue { id number title state stateReason issueType { name }
         milestone { title dueOn } parent { number } blockedBy(first: 50) { nodes { state } } } }
@@ -1505,6 +1507,7 @@ def normalize_project_item(node):
         "item_id": node["id"], "id": c["id"], "number": c["number"], "title": c["title"],
         "type": _tname(c), "state": c["state"], "state_reason": c.get("stateReason"),
         "status": _val(node, "status", "name"), "priority": _val(node, "priority", "name"),
+        "rework_count": int(_val(node, "rework", "number") or 0),
         "blocked_reason": _val(node, "blocked", "text"),
         "milestone": ms.get("title"), "milestone_due": ms.get("dueOn"),
         "parent": (c.get("parent") or {}).get("number"),
@@ -2332,6 +2335,12 @@ def main(argv=None):
     p = sub.add_parser("impact")
     p.add_argument("number", type=_num)
     p.add_argument("--post", action="store_true")
+    p = sub.add_parser("status")
+    p.add_argument("--milestone")
+    sub.add_parser("resume")
+    p = sub.add_parser("review-done")
+    p.add_argument("number", type=_num)
+    p.add_argument("--fail", help="tóm tắt blocker; có thì script rework")
     a = ap.parse_args(argv)
     wf = rules.load_workflow()
     try:
@@ -2357,6 +2366,12 @@ def main(argv=None):
             cmd_submit(cfg, wf, a.number)
         elif a.cmd == "impact":
             cmd_impact(cfg, a.number, a.post)
+        elif a.cmd == "status":
+            cmd_status(cfg, wf, a.milestone)
+        elif a.cmd == "resume":
+            cmd_resume(cfg, wf)
+        elif a.cmd == "review-done":
+            cmd_review_done(cfg, wf, a.number, a.fail)
         elif a.cmd == "new":
             body = (Path(a.body_file).read_text(encoding="utf-8") if a.body_file else
                     rules.fill(rules.load_templates(), a.type, dict(f.split("=", 1) for f in a.field)))
@@ -3073,7 +3088,7 @@ def render_pr_body(s, parent, commits, security):
 - Produces:
   - gh: `issue_branches(cfg, n) -> list[str]`, `develop(cfg, n, cwd=None)`, `create_pr(cfg, title, body, head) -> int`, `pr_view(cfg, pr) -> tuple[str, str]`, `pr_diff(cfg, pr) -> str`, `pr_checks(cfg, pr) -> tuple[bool | None, str]` (None = PR không có CI), `merge_pr(cfg, pr)`.
   - omi: `run_cmd(cmd: str|list, cwd=None) -> tuple[int, str]` (lệnh git/test chạy với `cwd=repo_dir(cfg)`), `cmd_context(cfg, n) -> str`, `cmd_start(cfg, wf, n=None) -> int|None`, `cmd_check(cfg) -> int`, `cmd_submit(cfg, wf, n) -> tuple[int, list[str]]` (PR, reviewers), `cmd_qa(cfg, wf, n) -> int`, `cmd_accept(cfg, wf, n) -> int`, `cmd_impact(cfg, n, post=False) -> str`, `cmd_plan_show(wf, path) -> int`, `cmd_pr_lint(cfg, pr) -> int`. `start` ghi số task vào `.omi/tmp/current`, `qa` xóa khi Done (hook SessionStart dùng file này).
-  - Dòng output (skill dựa vào): `START #n` | `NONE`; `CHECK PASS` | `CHECK FAIL (<bước>)`; `REVIEW #n PR #p pack=<file> reviewers=code[,security]|none`; `QA FAIL #n (<test|CI>) log=<file> status=<In Progress|Blocked>`; `DONE #n`; `ACCEPT PASS #p` | `ACCEPT FAIL #p: ...`; `PR OK` | `PR FAIL` + lỗi.
+  - Dòng output (skill dựa vào): `START #n` | `NONE`; `CHECK PASS` | `CHECK FAIL (<bước>)`; `REVIEW #n PR #p pack=<file> reviewers=code[,security]|none`; `QA FAIL #n (<test|CI>) log=<file> status=<In Progress|Blocked>`; `DONE #n`; `ACCEPT PASS #p` | `ACCEPT FAIL #p: ...`; `PR OK` | `PR FAIL` + lỗi. `submit` chỉ đọc marker `<!-- omi:reviewed -->` (do `review-done` ở Task 020 ghi sau khi có kết quả review).
 
 - [ ] **Step 1: Mở rộng `FakeGh` trong `tests/test_cli_flow.py`**
 
@@ -3162,7 +3177,7 @@ class TestPipeline(unittest.TestCase):
         self.assertIn("- #3: thêm login", body)
         self.assertIn("Có chạm security", body)
         self.assertIn("+x = 1", (omi.TMP / "review-3.md").read_text(encoding="utf-8"))
-        self.assertTrue(any("omi:reviewed" in c for c in self.g.notes[3]))
+        self.assertFalse(any("omi:reviewed" in c for c in self.g.notes.get(3, [])))  # marker do review-done ghi
 
     def test_submit_after_rework_skips_review(self):
         self.g.add(2, "User Story", "In Progress")
@@ -3341,7 +3356,6 @@ def cmd_submit(cfg, wf, n):
             render_context(s, parent, [gh.issue_snapshot(cfg, a) for a in affected(s["body"])])
             + f"\n\n## Diff PR #{pr} ({len(diff)} dòng)\n```diff\n" + "\n".join(diff[:limit])
             + ("\n... (đã cắt)" if len(diff) > limit else "") + "\n```\n", encoding="utf-8")
-        gh.comment(cfg, n, f"<!-- omi:reviewed -->\n🔎 Review 1 lượt: {', '.join(reviewers)}")
         print(f"REVIEW #{n} PR #{pr} pack={pack.as_posix()} reviewers={','.join(reviewers)}")
     else:
         print(f"REVIEW #{n} PR #{pr} reviewers=none")
@@ -3502,9 +3516,9 @@ class TestSession(unittest.TestCase):
                 return "# #7 [Task] Làm form đăng nhập"
 
             t = guard.session_text(Path("/plug"), Path(d), "clear", fake)
-            self.assertIn("TASK ĐANG LÀM", t)
+            self.assertIn("omi-resume", t)
             self.assertIn("# #7 [Task]", t)
-            self.assertEqual(calls, [["context", "7"]])
+            self.assertEqual(calls[0][-1], "resume")
             (tmp / "current").unlink()
             self.assertIn("NEXT: #8", guard.session_text(Path("/plug"), Path(d), "clear", lambda a, c: "#8 [Task] Y"))
             self.assertEqual(len(guard.session_text(Path("/plug"), Path(d), "resume", fake).splitlines()), 1)
@@ -3567,9 +3581,9 @@ def session_text(plugin_root, cwd, source="startup", run=_run):
     if not root or source not in ("startup", "clear"):
         return head
     cur = root / ".omi" / "tmp" / "current"
-    if cur.exists():
-        ctx = run([sys.executable, str(script), "context", cur.read_text(encoding="utf-8").strip()], root)
-        return f"{head}\nTASK ĐANG LÀM (tiếp tục bằng skill omi-implement, không cần chạy lại context):\n{ctx}"
+    if cur.exists():  # task dở (kể cả phiên trước dừng vì chạm limit): script tính bước tiếp + context
+        out = run([sys.executable, str(script), "resume"], root)
+        return f"{head}\n{out}\n(Tiếp tục bằng skill omi-resume; không cần chạy lại resume/context)"
     nxt = run([sys.executable, str(script), "next"], root)
     return f"{head}\nNEXT: {nxt}" if nxt else head
 
@@ -3762,12 +3776,13 @@ description: Làm một Task/Bug omi tới Done (start → code → check → su
 
 `OMI_CLI` = lệnh ở dòng `OMI_CLI:` đầu phiên. Bạn tự viết và tự sửa code trong phiên này; không giao code cho subagent.
 
-1. Đầu phiên đã có `TASK ĐANG LÀM` → dùng luôn context đó, làm tiếp từ bước phù hợp. Nếu không: `OMI_CLI start [n]` → `START #n` (hoặc `NONE`: báo và dừng), rồi `OMI_CLI context n`.
+1. Đầu phiên đã có dòng `RESUME` → làm theo skill omi-resume. Nếu không: `OMI_CLI start [n]` → `START #n` (hoặc `NONE`: báo và dừng), rồi `OMI_CLI context n`.
 2. TDD: test trước (Bug: test tái hiện; AC của parent #p: test tên chứa `ac<p>_<i>`), rồi code. Chỉ đọc file cần thiết. Lặp `OMI_CLI check` tới `CHECK PASS`. Commit `#n: <tóm tắt>`.
 3. `OMI_CLI submit n` → `REVIEW #n PR #pr pack=<f> reviewers=<...>`.
 4. Nếu `reviewers` khác `none`: gọi song song `omi-reviewer` và (nếu có `security`) `omi-security-reviewer`, prompt đúng một dòng `Pack: <f>`.
    - Mỗi `IMPROVE:` → `OMI_CLI new Task "<gợi ý ngắn>" --parent <parent của n> --field "Việc cần làm=<gợi ý>"` (Draft). Không làm trong task này.
-   - Có `BLOCKER:` → `OMI_CLI rework n --reason "<blocker gộp ≤ 3 dòng>"` → sửa → `check` → `submit n` (lần này `reviewers=none`, không review lại).
+   - Không có `BLOCKER:` → `OMI_CLI review-done n`.
+   - Có `BLOCKER:` → `OMI_CLI review-done n --fail "<blocker gộp ≤ 3 dòng>"` (script ghi nhận + rework) → sửa → `check` → `submit n` (lần này `reviewers=none`, không review lại).
 5. `OMI_CLI qa n`:
    - `QA FAIL ... log=<f> status=In Progress` → đọc log, sửa, `check`, `submit n`, `qa n`.
    - `status=Blocked` → dừng, báo người dùng (vượt 3 lần rework).
@@ -3825,7 +3840,227 @@ description: Phân rã PRD thành plan JSON omi (Epic → Story/Functional Requi
 
 ## Phase 5 — Kiểm thử đầu-cuối và phát hành
 
-### Task 020: E2E sandbox, README, dogfood
+### Task 020: Lệnh status, resume, review-done và skill omi-status, omi-resume
+
+Script-first: toàn bộ logic nằm trong CLI; hai skill chỉ là lớp mỏng gọi CLI. Gõ `! <OMI_CLI> status` là 0 token.
+
+**Files:**
+- Modify: `scripts/omi.py` (thêm trước `def _num`), `scripts/gh.py` (Task 007 đã có `rework` trong `ITEMS_QUERY`)
+- Create: `skills/omi-status/SKILL.md`, `skills/omi-resume/SKILL.md`
+- Test: `tests/test_cli.py`, `tests/test_cli_flow.py`
+
+**Interfaces:**
+- Consumes: `gh.project_items` (có `rework_count`), `rules.pick_next`, `cmd_context`, `cmd_rework`, `find_marker`, `repo_dir`, `run_cmd`, `TMP`.
+- Produces: `omi.render_status(wf, items, milestone=None) -> str`, `omi.resume_step(status, dirty: bool, ahead: int, reviewed: bool, pack_exists: bool) -> tuple[str, str]`, `omi.cmd_status(cfg, wf, milestone=None) -> str`, `omi.cmd_resume(cfg, wf) -> str|None` (bước), `omi.cmd_review_done(cfg, wf, n, fail=None)`.
+- Output: `STATUS ...`; `RESUME #n status=<S> step=<code|submit|review|qa|blocked|start|next>` + gợi ý (+ context khi step là `code`/`submit`); `RESUME none step=next`; `REVIEWED #n PASS|FAIL`.
+
+- [ ] **Step 1: Thêm test vào `tests/test_cli.py`**
+
+```python
+def pitem(n, type_, status, parent=None, **kw):
+    base = {"number": n, "title": f"[{type_}] item {n}", "type": type_, "status": status, "state": "OPEN",
+            "parent": parent, "milestone": "v1", "milestone_due": None, "priority": "P1",
+            "open_blockers": 0, "blocked_reason": None, "rework_count": 0}
+    base.update(kw)
+    return base
+
+
+class TestStatusResume(unittest.TestCase):
+    def test_render_status(self):
+        items = [pitem(1, "Epic", "In Progress"), pitem(2, "User Story", "In Progress", 1),
+                 pitem(3, "Task", "Done", 2), pitem(4, "Task", "In Review", 2, rework_count=2),
+                 pitem(5, "Task", "Blocked", 2, blocked_reason="chờ API key"), pitem(6, "Task", "Ready", 2),
+                 pitem(7, "Task", "Cancelled", 2)]
+        out = omi.render_status(omi.rules.load_workflow(), items)
+        self.assertIn("STATUS: 1/6 (16%) item Done · Task/Bug 1/4 (25%)", out)
+        self.assertIn("- #1 [Epic] item 1 — In Progress · 1/5 (20%)", out)
+        self.assertIn("- #4 [Task] item 4 — In Review", out)
+        self.assertIn("chờ API key", out)
+        self.assertIn("2 lần", out)
+        self.assertIn("Tiếp theo: #6", out)
+        self.assertIn("STATUS v2: 0/0", omi.render_status(omi.rules.load_workflow(), items, "v2"))
+
+    def test_resume_step(self):
+        rs = omi.resume_step
+        self.assertEqual(rs("In Progress", True, 0, False, False)[0], "code")
+        self.assertEqual(rs("In Progress", False, 0, False, False)[0], "code")
+        self.assertEqual(rs("In Progress", False, 2, False, False)[0], "submit")
+        self.assertEqual(rs("In Review", False, 2, False, True)[0], "review")
+        self.assertIn("submit", rs("In Review", False, 2, False, False)[1])  # mất gói review → submit lại
+        self.assertEqual(rs("In Review", False, 2, True, True)[0], "qa")
+        self.assertEqual(rs("In QA", False, 0, True, False)[0], "qa")
+        self.assertEqual(rs("Blocked", False, 0, False, False)[0], "blocked")
+        self.assertEqual(rs("Ready", False, 0, False, False)[0], "start")
+        self.assertEqual(rs("Done", False, 0, True, False)[0], "next")
+```
+
+- [ ] **Step 2: Thêm test vào `tests/test_cli_flow.py` (class `TestPipeline`)**
+
+```python
+    def test_review_done_fail_marks_and_reworks(self):
+        self.g.add(2, "User Story", "In Progress")
+        self.g.add(3, "Task", "In Review", parent=2, prs=[dict(OPEN_PR)])
+        omi.cmd_review_done(PCFG, WF, 3, "thiếu test cho case rỗng")
+        self.assertEqual((self.st(3), self.g.issues[3]["rework_count"]), ("In Progress", 1))
+        self.assertTrue(any("omi:reviewed" in c for c in self.g.notes[3]))
+
+    def test_resume_after_crash_before_review(self):
+        self.g.add(2, "User Story", "In Progress")
+        self.g.add(3, "Task", "In Review", parent=2, prs=[dict(OPEN_PR)])
+        (omi.TMP / "current").write_text("3", encoding="utf-8")
+        (omi.TMP / "review-3.md").write_text("pack", encoding="utf-8")
+        with mock.patch.object(omi, "run_cmd", return_value=(0, "")):
+            self.assertEqual(omi.cmd_resume(PCFG, WF), "review")
+
+    def test_resume_done_task_clears_current(self):
+        self.g.add(3, "Task", "Done", state="CLOSED")
+        (omi.TMP / "current").write_text("3", encoding="utf-8")
+        with mock.patch.object(omi, "run_cmd", return_value=(0, "")):
+            self.assertEqual(omi.cmd_resume(PCFG, WF), "next")
+        self.assertFalse((omi.TMP / "current").exists())
+```
+
+- [ ] **Step 3: Chạy để thấy thất bại** — Expected: `AttributeError ... 'render_status'`.
+
+- [ ] **Step 4: Thêm vào `scripts/omi.py` (trước `def _num`)**
+
+```python
+ACTIVE = ("In Progress", "In Review", "In QA")
+
+
+def render_status(wf, items, milestone=None):
+    items = [i for i in items if milestone is None or i["milestone"] == milestone]
+    live = [i for i in items if i["status"] != "Cancelled"]
+    kids, lines = {}, []
+    for i in items:
+        kids.setdefault(i["parent"], []).append(i)
+
+    def desc(n):
+        out, stack = [], list(kids.get(n, []))
+        while stack:
+            c = stack.pop()
+            out.append(c)
+            stack += kids.get(c["number"], [])
+        return [x for x in out if x["status"] != "Cancelled"]
+
+    def ratio(xs):
+        d = sum(1 for x in xs if x["status"] == "Done")
+        return f"{d}/{len(xs)} ({d * 100 // len(xs) if xs else 0}%)"
+
+    def section(title, rows):
+        if rows:
+            lines.append(title)
+            lines.extend(rows)
+
+    tasks = [i for i in live if i["type"] in ("Task", "Bug")]
+    lines.append(f"STATUS{' ' + milestone if milestone else ''}: {ratio(live)} item Done · Task/Bug {ratio(tasks)}")
+    lines.append(" · ".join(f"{s} {c}" for s in wf["statuses"]
+                            if (c := sum(1 for i in items if i["status"] == s))))
+    for e in sorted((i for i in items if i["type"] == "Epic"), key=lambda x: x["number"]):
+        lines.append(f"- #{e['number']} {e['title']} — {e['status']} · {ratio(desc(e['number']))}")
+    section("Đang làm:", [f"- #{i['number']} {i['title']} — {i['status']}" for i in live if i["status"] in ACTIVE])
+    section("Blocked:", [f"- #{i['number']} {i['title']} — {i['blocked_reason'] or 'blocked-by'}"
+                         for i in live if i["status"] == "Blocked"])
+    section("Rework:", [f"- #{i['number']} {i['title']} — {i['rework_count']} lần" for i in live if i.get("rework_count")])
+    nxt = rules.pick_next(wf, items)
+    lines.append(f"Tiếp theo: #{nxt['number']} {nxt['title']}" if nxt else "Tiếp theo: (không có Task/Bug Ready)")
+    return "\n".join(lines)
+
+
+def cmd_status(cfg, wf, milestone=None):
+    text = render_status(wf, [i for i in gh.project_items(cfg) if i["title"] != gh.AUDIT_TITLE], milestone)
+    print(text)
+    return text
+
+
+def resume_step(status, dirty, ahead, reviewed, pack_exists):
+    """Bước tiếp theo của task dở, suy ra thuần từ trạng thái (GitHub + git + .omi/tmp)."""
+    if status in (None, "Done", "Cancelled"):
+        return "next", "Task đã kết thúc → `start` lấy task tiếp."
+    if status == "Blocked":
+        return "blocked", "Task đang Blocked → báo người dùng lý do, chờ `unblock`."
+    if status in ("Draft", "Triage", "Ready"):
+        return "start", "Chưa bắt đầu → `start`."
+    if status == "In Progress":
+        if dirty or ahead == 0:
+            return "code", "Đang viết code: xem `git diff --stat`, làm tiếp → `check` → commit → `submit`."
+        return "submit", "Code đã commit → `check` → `submit`."
+    if status == "In Review":
+        if reviewed:
+            return "qa", "Review đã ghi nhận → `qa`."
+        return "review", ("Chưa có kết quả review → gọi reviewer với gói `.omi/tmp/review-<n>.md` rồi `review-done`."
+                          if pack_exists else "Chưa có kết quả review và mất gói review → `submit` lại để sinh gói.")
+    return "qa", "Đang QA → chạy lại `qa`."
+
+
+def cmd_resume(cfg, wf):
+    cur = TMP / "current"
+    if not cur.exists():
+        print("RESUME none step=next — không có task dở; `start` để lấy task tiếp.")
+        return None
+    n = int(cur.read_text(encoding="utf-8").strip())
+    s = gh.issue_snapshot(cfg, n)
+    rd, base = repo_dir(cfg), f"origin/{cfg.get('default_branch', 'main')}"
+    _, dirty = run_cmd(["git", "status", "--porcelain"], cwd=rd)
+    _, ahead = run_cmd(["git", "rev-list", "--count", f"{base}..HEAD"], cwd=rd)
+    reviewed = find_marker(gh.comments(cfg, n), "reviewed") is not None
+    step, hint = resume_step(s["status"], bool(dirty.strip()), int(ahead.strip()) if ahead.strip().isdigit() else 0,
+                             reviewed, (TMP / f"review-{n}.md").exists())
+    if step == "next":
+        cur.unlink(missing_ok=True)
+    print(f"RESUME #{n} status={s['status']} step={step}\n{hint.replace('<n>', str(n))}")
+    if step in ("code", "submit"):
+        print()
+        cmd_context(cfg, n)
+    return step
+
+
+def cmd_review_done(cfg, wf, n, fail=None):
+    """Ghi nhận review 1 lượt SAU khi reviewer trả kết quả (resume dựa vào marker này); FAIL → rework."""
+    gh.comment(cfg, n, f"<!-- omi:reviewed -->\n🔎 Review 1 lượt: {'FAIL — ' + fail if fail else 'PASS'}")
+    if fail:
+        cmd_rework(cfg, wf, n, f"Review: {fail}")
+    print(f"REVIEWED #{n} {'FAIL' if fail else 'PASS'}")
+```
+
+- [ ] **Step 5: `skills/omi-status/SKILL.md`**
+
+```markdown
+---
+name: omi-status
+description: Xem tiến độ dự án omi (tỉ lệ Done, theo Epic/milestone, đang làm, Blocked, rework, task kế tiếp).
+---
+
+Chạy `OMI_CLI status` (thêm `--milestone <m>` nếu người dùng nêu) và trả lại **nguyên văn** output; không phân tích thêm trừ khi được hỏi. Nhắc một dòng: gõ `! <OMI_CLI> status` để xem mà không tốn token.
+```
+
+- [ ] **Step 6: `skills/omi-resume/SKILL.md`**
+
+```markdown
+---
+name: omi-resume
+description: Tiếp tục task omi còn dở của phiên trước (tạm dừng, chạm limit): script xác định bước tiếp theo rồi làm tiếp theo omi-implement.
+---
+
+`OMI_CLI` = lệnh ở dòng `OMI_CLI:` đầu phiên. Không đọc lại lịch sử phiên trước; trạng thái nằm trên GitHub + git + `.omi/tmp/`.
+
+1. Đầu phiên đã có dòng `RESUME ...` (hook) → dùng luôn; nếu không: `OMI_CLI resume`.
+2. Theo `step`:
+   - `code`: `git -C <repo_dir> diff --stat` để biết phần đã làm, chỉ mở file liên quan; làm tiếp → `OMI_CLI check` → commit → bước 3 của omi-implement.
+   - `submit`: `OMI_CLI check` → `OMI_CLI submit n` → bước 4 của omi-implement.
+   - `review`: bước 4 của omi-implement với gói `.omi/tmp/review-n.md` (gợi ý nói mất gói → `OMI_CLI submit n` trước).
+   - `qa`: `OMI_CLI qa n` → bước 5 của omi-implement.
+   - `blocked`: báo người dùng lý do, dừng.
+   - `start` / `next`: chạy omi-implement từ bước 1.
+```
+
+- [ ] **Step 7: Chạy test** — Run: `python -m unittest discover -s tests -v` — Expected: PASS.
+
+- [ ] **Step 8: Thử trên sandbox**: giữa chừng một task (In Progress, có thay đổi chưa commit) đóng phiên Claude Code → mở phiên mới → dòng đầu có `RESUME #n status=In Progress step=code` kèm context; `! <OMI_CLI> status` in đúng số liệu Project.
+
+- [ ] **Step 9: Commit** — `git add -A && git commit -m "feat: status, resume, review-done; skill omi-status, omi-resume"`
+
+### Task 021: E2E sandbox, README, dogfood
 
 **Files:**
 - Create: `tests/e2e.sh`

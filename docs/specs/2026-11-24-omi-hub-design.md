@@ -52,7 +52,7 @@ LLM chỉ làm 5 việc cần phán đoán: (1) phân rã PRD thành plan JSON, 
 
 Quy tắc giảm token cố định:
 
-- Chỉ 3 skill (`omi-plan`, `omi-implement`, `omi-change`), mô tả mỗi skill một dòng. Thao tác thường ngày không cần skill.
+- 3 skill làm việc cần LLM (`omi-plan`, `omi-implement`, `omi-change`) + 2 skill mỏng chỉ gọi script (`omi-status`, `omi-resume`); mô tả mỗi skill một dòng. Thao tác thường ngày không cần skill (`! <OMI_CLI> ...` = 0 token).
 - Mục omi trong `AGENTS.md` ≤ 15 dòng; luật nằm trong script, không lặp lại trong prompt.
 - SessionStart in đúng 1 dòng.
 - Output CLI dạng một dòng có tiền tố máy đọc được (`START`, `CHECK PASS`, `REVIEW`, `QA FAIL`...); log dài ghi ra `.omi/tmp/` và chỉ in đường dẫn.
@@ -122,7 +122,7 @@ Cơ chế GitHub dùng:
 - `<!-- omi:key=E001.S002.T003 -->` trong body: khóa idempotent khi tạo từ plan.
 - `<!-- omi:blocked-from=<Status> -->` trong comment khi block: để unblock về đúng trạng thái cũ.
 - `<!-- omi:rework n=2 stage=review -->` trong comment rework.
-- `<!-- omi:reviewed -->` trong comment khi `submit` lần đầu: review LLM đã chạy, không review lại.
+- `<!-- omi:reviewed -->` trong comment do `review-done` ghi sau khi reviewer trả kết quả: không review lại; `resume` dựa vào marker này.
 - `<!-- omi:impact -->` trong comment phân tích ảnh hưởng Change Request.
 
 ### 3.6 Template chuẩn cho từng loại
@@ -272,6 +272,8 @@ omi-hub/
     omi-plan/SKILL.md
     omi-implement/SKILL.md
     omi-change/SKILL.md     # Change Request + Bug
+    omi-status/SKILL.md     # mỏng: OMI_CLI status
+    omi-resume/SKILL.md     # mỏng: OMI_CLI resume → làm tiếp theo step
   agents/
     omi-reviewer.md
     omi-security-reviewer.md
@@ -348,7 +350,10 @@ Blocked và rework là quy tắc chung, được `rules.py` xử lý, không l�
 | `context N` | In ngữ cảnh gọn cho LLM: issue, AC của parent, item Affects, quy ước test AC |
 | `start [N]` | Chọn `next` nếu không có N; Draft→Ready→In Progress; checkout branch của issue |
 | `check` | Chạy lần lượt `commands.lint`, `typecheck`, `scan`, `test` (cái nào cấu hình); in `CHECK PASS` hoặc `CHECK FAIL (<bước>)` + 60 dòng cuối |
-| `submit N` | Push, tạo PR (`Closes #N`) nếu chưa có, → In Review. Lần đầu: ghi gói review `.omi/tmp/review-N.md`, comment marker `<!-- omi:reviewed -->`, in `REVIEW ... reviewers=code[,security]`. Đã có marker: in `REVIEW ... reviewers=none` |
+| `submit N` | Push, tạo PR (`Closes #N`) nếu chưa có, → In Review. Chưa có marker review: ghi gói review `.omi/tmp/review-N.md`, in `REVIEW ... reviewers=code[,security]`. Đã có marker: in `REVIEW ... reviewers=none` |
+| `review-done N [--fail R]` | Ghi marker `<!-- omi:reviewed -->` **sau khi** reviewer trả kết quả; `--fail` → rework với lý do R |
+| `status [--milestone M]` | Một truy vấn: tỉ lệ Done (item, Task/Bug), theo Epic, đếm theo Status, đang làm, Blocked + lý do, rework, task kế tiếp |
+| `resume` | Task dở trong `.omi/tmp/current` + Status + git (dirty, commit chưa merge) + marker review + gói review → `RESUME #n step=<code\|submit\|review\|qa\|blocked\|start\|next>` + gợi ý (+ context) |
 | `qa N` | → In QA, chờ `gh pr checks --watch` (PR không có CI thì chạy `commands.test`, có CI thì không chạy trùng); fail → rework + log `.omi/tmp/qa-N.log`; pass → merge squash → Done → rollup → `accept` parent nếu parent vào In QA |
 | `accept N` | Nghiệm thu Story/Functional Requirement/Non-Functional Requirement: chạy `commands.accept` (thay `{n}`), mỗi AC tự động phải có test `ac<N>_<i>` pass, AC `[manual]` phải được tick; pass → Done; AC tự động fail → rework |
 | `impact N [--post]` | Liệt kê item Affects của Change Request + item con kèm status; `--post` đăng comment có `<!-- omi:impact -->` |
@@ -429,15 +434,19 @@ Một agent (phiên chính) làm trọn task:
 1. `start [N]` → `START #N` (hoặc `NONE` → dừng). `context N` → đọc yêu cầu + AC.
 2. Viết code + test theo TDD (test AC tên `ac<parent>_<i>`), lặp `check` tới `CHECK PASS`, commit.
 3. `submit N` → `REVIEW #N PR #P pack=<file> reviewers=code[,security]`.
-4. Gọi `omi-reviewer` (và `omi-security-reviewer` nếu có) **song song, 1 lượt**.
+4. Gọi `omi-reviewer` (và `omi-security-reviewer` nếu có) **song song, 1 lượt**; xong thì `review-done N` (PASS) hoặc `review-done N --fail "..."` (script rework).
    - `IMPROVE:` → `new Task "<gợi ý>" --parent <parent của N>` (Draft), không sửa trong task này.
-   - Có `BLOCKER` → `rework N --reason "<blocker gộp>"` → tự sửa (cùng ngữ cảnh) → `check` → `submit N` (lần này `reviewers=none`, không review lại).
+   - Có `BLOCKER` → `review-done N --fail "<blocker gộp>"` (ghi nhận + rework) → tự sửa (cùng ngữ cảnh) → `check` → `submit N` (lần này `reviewers=none`, không review lại).
 5. `qa N` →
    - `QA FAIL #N log=<file>` → script đã rework; đọc log, sửa, `check`, `submit N`, `qa N`.
    - `DONE #N` → kèm các dòng rollup và `ACCEPT PASS|FAIL #p` nếu parent vào In QA.
 6. Báo 1 dòng. Người dùng muốn làm tiếp: gõ `/clear` rồi `tiếp`.
 
-**Tự nạp ngữ cảnh sau `/clear`**: model không tự gọi được `/clear` (lệnh giao diện), nên người dùng gõ. Phần còn lại tự động: `start` ghi số task vào `.omi/tmp/current` (`qa` xóa khi Done); hook SessionStart (source `startup`/`clear`) chạy script: có task dở → in sẵn `context` của task đó; không có → in `NEXT: ...`. LLM không tốn lượt nào để dựng lại ngữ cảnh.
+**Tiếp tục công việc dở** (phiên bị tạm dừng, chạm limit 5h...): mở phiên mới → hook SessionStart chạy `resume` → dòng `RESUME #n step=...` + context có sẵn → người dùng gõ "tiếp" (skill `omi-resume`). Marker review chỉ ghi sau khi có kết quả (`review-done`), nên phiên chết giữa lúc review vẫn resume đúng về bước review.
+
+**Xem tiến độ**: `! <OMI_CLI> status` (0 token) hoặc skill `omi-status`.
+
+**Tự nạp ngữ cảnh sau `/clear`**: model không tự gọi được `/clear` (lệnh giao diện), nên người dùng gõ. Phần còn lại tự động: `start` ghi số task vào `.omi/tmp/current` (`qa` xóa khi Done); hook SessionStart (source `startup`/`clear`) chạy script: có task dở → in kết quả `resume` (bước tiếp + context); không có → in `NEXT: ...`. LLM không tốn lượt nào để dựng lại ngữ cảnh.
 
 Nghiệm thu thất bại: `accept` đã rework parent; phiên chính tạo Task bổ sung `new Task "Đạt AC<i> của #p" --parent p` rồi chạy vòng trên. Thiếu tick AC `[manual]` → báo người, không làm gì thêm.
 
