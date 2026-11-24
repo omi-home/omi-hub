@@ -3,14 +3,13 @@ import json
 from pathlib import Path
 
 from omi_hub.config import load_pr_template, load_templates
+from omi_hub.domain.security import DEFAULT_SECURITY
 from omi_hub.domain.forms import form_filename, render_form, render_pr_template
 from omi_hub.domain.text import merge_agents_md
 from omi_hub.infrastructure.github import gateway as gh
 
 CONFIG = Path(".omi") / "project.json"  # tương đối với workspace (cwd khi chạy init)
 TEMPLATES = Path(__file__).resolve().parents[3] / "templates"
-DEFAULT_SECURITY = ["auth", "login", "password", "secret", "token", "crypto", "permission", "acl",
-                    "session", r"\.env", "sql"]
 
 
 def write_templates(hub_repo, repo=Path("."), workspace=Path(".")):
