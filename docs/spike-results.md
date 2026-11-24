@@ -13,7 +13,7 @@ Sandbox: `omi-home/omi-sandbox` (private, giữ lại cho e2e), Project thử `o
 | 7 | updateProjectV2Field options Status | ✓ 10 option đúng thứ tự | Giữ nguyên `UPDATE_STATUS` |
 | 8 | project copy giữ views/workflows | ◐ Bản copy giữ Status 10 options, các view (kể cả `Board` tự tạo) và workflow `Auto-add sub-issues to project`. **Không giữ** workflow `Auto-add to project` (bản gốc bật, bản copy không có trong danh sách workflows). View tạo được bằng REST `POST orgs/{org}/projectsV2/{n}/views` (`name`, `layout=board`); workflow không có API | Giữ `gh project copy`; view thiếu → tạo bằng REST. Không dựa vào Auto-add: omi tự thêm item (`add_to_project`, Task 007); `init` in hướng dẫn bật Auto-add trên UI nếu muốn |
 | 9 | --paginate --slurp | ✓ trả `[[...],[...]]` (per_page=1, 2 trang). **Không dùng chung với `--jq`** (gh báo lỗi) | Parse JSON trong Python, không truyền `--jq` khi `--slurp` |
-| 10 | Issue form `type:` | ☐ Form `task.yml` có `type: "Task"` đã push lên sandbox; cần mở issue từ web để kiểm | Chờ kiểm UI |
+| 10 | Issue form `type:` | ✓ Issue #5 tạo từ form `task.yml` (`type: "Task"`) có type Task; event `issues: typed` cũng bắn khi tạo từ form | Giữ nguyên (Task 011) |
 | 11 | Action `issues: typed` | ✓ đổi type #1, #3 bằng REST → 2 run `issues` success | Giữ nguyên |
 | 12 | CLAUDE_PLUGIN_ROOT trong hook | ✓ `ROOT=<thư mục plugin>` (đường dẫn dạng `C:/...` dấu `/`) | Giữ nguyên |
 | 13 | agent memory: project trong plugin | ✓ nhưng thư mục là `.claude/agent-memory/<plugin>-<agent>/` (ví dụ `probe-probe/`), agent gọi bằng `probe:probe` | Spec D9 sửa đường dẫn (`omi-hub-omi-reviewer/`); skill gọi reviewer bằng `omi-hub:omi-reviewer` |
