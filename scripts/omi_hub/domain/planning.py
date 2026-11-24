@@ -3,6 +3,7 @@ import re
 
 from .errors import RuleError
 from .relations import check_parent
+from .templates import check_template, with_prefix
 
 
 def pick_next(wf, items):
@@ -20,7 +21,7 @@ KEY_LETTER = {"Epic": "E", "User Story": "S", "Functional Requirement": "F", "No
 KEY_RE = re.compile(r"[A-Z]\d{3}(\.[A-Z]\d{3})*")
 
 
-def validate_plan(wf, plan):
+def validate_plan(wf, plan, tpl=None):
     errs, seen = [], set()
 
     def walk(node, parent_type):
@@ -44,6 +45,12 @@ def validate_plan(wf, plan):
                 errs.append(f"{k}: {e}")
         if t in AC_TYPES and "acceptance criteria" not in node.get("body", "").lower():
             errs.append(f"{k}: thiếu mục '### Acceptance criteria'")
+        if tpl and t in tpl:
+            body = node.get("body", "")
+            if node.get("affects"):
+                body += "\n\n### Affects\n" + " ".join(f"#{a}" for a in node["affects"])
+            title = with_prefix(tpl, t, node.get("title", ""))
+            errs.extend(f"{k}: {e}" for e in check_template(tpl, t, title, body))
         if t == "Epic" and parent_type is None and not (node.get("milestone") or plan.get("milestone")):
             errs.append(f"{k}: Epic cần milestone (plan.milestone hoặc node.milestone)")
         for c in node.get("children", []):

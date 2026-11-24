@@ -1,0 +1,14 @@
+{
+  "title": {
+    "pattern": "^\\[(Epic|User Story|Functional Requirement|Non-Functional Requirement|Change Request|Task|Bug)\\] .+ \\(#\\d+\\)$",
+    "example": "[Task] Thêm API POST /orders (#12)",
+    "hint": "<title issue, gồm prefix> (#<số issue>)"
+  },
+  "sections": [
+    {"heading": "Liên kết", "required": true, "pattern": "(Closes|Fixes|Resolves) #\\d+", "hint": "Closes #<số issue>; Parent: #<số> <title>"},
+    {"heading": "Thay đổi", "required": true, "hint": "Gạch đầu dòng các thay đổi chính"},
+    {"heading": "Acceptance criteria liên quan", "required": false, "hint": "AC của parent mà PR này đáp ứng, kèm tên test ac<p>_<i>"},
+    {"heading": "Kiểm thử", "required": true, "checklist": true, "default": "- [ ] lint/typecheck/scan/test pass\n- [ ] CI xanh", "placeholder": false},
+    {"heading": "Security", "required": true, "options": ["Không chạm security", "Có chạm security"]}
+  ]
+}

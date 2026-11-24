@@ -8,7 +8,8 @@
 
 > **Ánh xạ tên trong plan (đổi từ Task 002):** code mẫu các task sau viết theo bố cục phẳng cũ — khi làm, đặt vào module tương ứng, mỗi module một trách nhiệm:
 > - `rules.load_workflow`, `rules.load_templates`, `workflow.json`, `templates.json`, `pr_template.json` → `omi_hub.config`
-> - `rules.RuleError` → `omi_hub.domain.errors`; transition/Blocked/`BLOCKED`/`is_terminal`/`needs_human` → `omi_hub.domain.lifecycle`
+> - `rules.sections/prefix/with_prefix/check_template/check_pr/fill/skeleton` → `omi_hub.domain.templates`
+- `rules.RuleError` → `omi_hub.domain.errors`; transition/Blocked/`BLOCKED`/`is_terminal`/`needs_human` → `omi_hub.domain.lifecycle`
 > - rework → `domain/rework.py`; quan hệ cha–con, rollup → `domain/relations.py`; guards → `domain/guards.py`; invariants → `domain/audit.py`; chọn next → `domain/planning.py` (cùng `validate_plan`)
 > - `gh.py` → `omi_hub/infrastructure/gh.py`; lệnh trong `omi.py` → `omi_hub/application/<nhóm lệnh>.py` + `omi_hub/cli/`; helper text thuần → `omi_hub/domain/text.py`
 > - Test: `tests/test_<layer>_<module>.py`, import `from omi_hub.<layer> import <module>`. GitHub Action chạy `omi.py audit` để kiểm tra bất biến khi người sửa tay trên web.
