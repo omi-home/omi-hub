@@ -1,5 +1,8 @@
 """Đọc/ghi issue: snapshot đầy đủ ngữ cảnh cho guard."""
-from . import client
+import json
+import re
+
+from . import client, milestones
 from .nodes import field_value, in_project, status_of, type_name
 
 AUDIT_TITLE = "OMI Audit"
@@ -56,3 +59,67 @@ def issue_snapshot(cfg, number):
     if raw is None:
         raise client.GhError(f"Không tìm thấy issue #{number}")
     return normalize_issue(raw, cfg["project_id"])
+
+
+def create_issue(cfg, title, body, type_, milestone=None):
+    data = {"title": title, "body": body, "type": type_}
+    if milestone:
+        data["milestone"] = milestones.milestone_number(cfg, milestone)
+    return client.rest("POST", f"{client.repo_path(cfg)}/issues", data)
+
+
+def issue_db_id(cfg, n):
+    return client.rest("GET", f"{client.repo_path(cfg)}/issues/{n}")["id"]
+
+
+def add_sub_issue(cfg, parent_n, child_db_id):
+    client.rest("POST", f"{client.repo_path(cfg)}/issues/{parent_n}/sub_issues", {"sub_issue_id": child_db_id})
+
+
+def add_blocked_by(cfg, n, blocker_db_id):
+    client.rest("POST", f"{client.repo_path(cfg)}/issues/{n}/dependencies/blocked_by", {"issue_id": blocker_db_id})
+
+
+def comment(cfg, n, body):
+    client.rest("POST", f"{client.repo_path(cfg)}/issues/{n}/comments", {"body": body})
+
+
+def comments(cfg, n):
+    pages = json.loads(client.run(["api", "--paginate", "--slurp", f"{client.repo_path(cfg)}/issues/{n}/comments?per_page=100"]))
+    return [c["body"] for page in pages for c in page]
+
+
+def close(cfg, n, reason):
+    client.rest("PATCH", f"{client.repo_path(cfg)}/issues/{n}", {"state": "closed", "state_reason": reason})
+
+
+def assign_self(cfg, n):
+    client.run(["issue", "edit", str(n), "-R", client.repo_full(cfg), "--add-assignee", "@me"])
+
+
+def repo_issues(cfg):
+    # ponytail: tối đa 1000 issue; chuyển sang phân trang GraphQL khi repo lớn hơn
+    return json.loads(client.run(["issue", "list", "-R", client.repo_full(cfg), "--state", "all", "--limit", "1000",
+                           "--json", "number,title,state"]))
+
+
+def existing_keys(cfg):
+    out = json.loads(client.run(["issue", "list", "-R", client.repo_full(cfg), "--state", "all", "--limit", "1000",
+                          "--json", "number,body"]))
+    keys = {}
+    for i in out:
+        m = re.search(r"<!-- omi:key=(\S+) -->", i["body"] or "")
+        if m:
+            keys[m.group(1)] = i["number"]
+    return keys
+
+
+def upsert_audit_issue(cfg, body):
+    found = [i for i in repo_issues(cfg) if i["title"] == AUDIT_TITLE and i["state"] == "OPEN"]
+    if body is None:
+        for i in found:
+            close(cfg, i["number"], "completed")
+    elif found:
+        client.rest("PATCH", f"{client.repo_path(cfg)}/issues/{found[0]['number']}", {"body": body})
+    else:
+        client.rest("POST", f"{client.repo_path(cfg)}/issues", {"title": AUDIT_TITLE, "body": body})

@@ -106,5 +106,26 @@ class TestRun(unittest.TestCase):
         self.assertEqual(json.loads(r.call_args.kwargs["input"]), {"query": "query{x}", "variables": {"a": 1}})
 
 
+class TestIssueOps(unittest.TestCase):
+    CFG = {"owner": "o", "repo": "r"}
+
+    def test_existing_keys(self):
+        out = json.dumps([{"number": 3, "body": "x\n<!-- omi:key=E001.S001 -->"}, {"number": 4, "body": None}])
+        with mock.patch.object(client, "run", return_value=out):
+            self.assertEqual(issues.existing_keys(self.CFG), {"E001.S001": 3})
+
+    def test_upsert_audit_issue(self):
+        open_audit = [{"number": 8, "title": issues.AUDIT_TITLE, "state": "OPEN"}]
+        with mock.patch.object(issues, "repo_issues", return_value=open_audit), \
+                mock.patch.object(client, "rest") as r:
+            issues.upsert_audit_issue(self.CFG, "body")
+            self.assertEqual(r.call_args.args[:2], ("PATCH", "repos/o/r/issues/8"))
+            issues.upsert_audit_issue(self.CFG, None)
+            self.assertEqual(r.call_args.args[2], {"state": "closed", "state_reason": "completed"})
+        with mock.patch.object(issues, "repo_issues", return_value=[]), mock.patch.object(client, "rest") as r:
+            issues.upsert_audit_issue(self.CFG, "body")
+            self.assertEqual(r.call_args.args[:2], ("POST", "repos/o/r/issues"))
+
+
 if __name__ == "__main__":
     unittest.main()

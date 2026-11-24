@@ -285,7 +285,7 @@ omi-hub/
     omi_hub/              # clean architecture, phụ thuộc chỉ đi vào trong
       config/             # workflow.json, templates.json, pr_template.json + hàm nạp
       domain/             # thuần: errors, lifecycle, rework, relations, guards, audit, planning, text
-      infrastructure/     # gh.py: subprocess gh api graphql / REST
+      infrastructure/     # github/: subprocess gh api graphql / REST
       application/        # use case theo nhóm lệnh
       cli/                # argparse + in output
   templates/
@@ -302,7 +302,7 @@ Ranh giới:
 
 - `domain/` không I/O, không import layer khác ngoài `domain`. Đầu vào: loại, status hiện tại, status đích, snapshot ngữ cảnh (parent, children, PR, blockers). Đầu ra: hợp lệ hay danh sách lỗi. Test được hoàn toàn bằng unittest.
 - `config/` chỉ đọc file khai báo đi kèm plugin.
-- `infrastructure/gh.py` là nơi duy nhất gọi `gh`. Trả về dict thuần.
+- `infrastructure/github/` là nơi duy nhất gọi `gh` (`client` → `issues`, `project`, `milestones`, `bootstrap`). Trả về dict thuần.
 - `application/` ghép: đọc snapshot qua `infrastructure` → hỏi `domain` → ghi qua `infrastructure` → rollup. `cli/` chỉ parse tham số và in kết quả.
 - Skills chỉ hướng dẫn Claude khi nào gọi lệnh nào; không chứa logic rule.
 
