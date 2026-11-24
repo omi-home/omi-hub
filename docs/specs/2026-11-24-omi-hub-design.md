@@ -194,7 +194,7 @@ Ký hiệu: **H** = cần người xác nhận (hook `ask`), **A** = plugin tự
 | Draft | Approved | H |
 | Approved | In Progress | A khi con đầu tiên vào In Progress |
 | In Progress | In QA | A khi mọi con kết thúc |
-| In QA | Done | QA nghiệm thu acceptance criteria đạt |
+| In QA | Done | QA nghiệm thu acceptance criteria đạt và mọi con đã kết thúc (guard `children_terminal`) |
 | In QA | In Progress | Rework (QA không đạt) → tạo Task bổ sung dưới item này |
 | Draft, Approved | Cancelled | G lý do |
 
