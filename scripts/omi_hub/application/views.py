@@ -1,6 +1,7 @@
 """Truy vấn chỉ đọc: cây work item, việc tiếp theo. Trả dữ liệu, CLI lo in."""
 from omi_hub.domain.errors import RuleError
 from omi_hub.domain.planning import pick_next
+from omi_hub.domain.progress import render_status
 from omi_hub.infrastructure.github import gateway as gh
 
 
@@ -29,3 +30,7 @@ def tree(cfg, n=None):
 
 def next_item(cfg, wf):
     return pick_next(wf, gh.project_items(cfg))
+
+
+def status(cfg, wf, milestone=None):
+    return render_status(wf, [i for i in gh.project_items(cfg) if i["title"] != gh.AUDIT_TITLE], milestone)

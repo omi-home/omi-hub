@@ -131,6 +131,30 @@ class TestPipeline(unittest.TestCase):
             self.assertEqual(pipeline.accept(self.cfg, WF, 2), 1)
         self.assertEqual(self.st(2), "In Progress")
 
+    def test_review_done_fail_marks_and_reworks(self):
+        self.g.add(2, "User Story", "In Progress")
+        self.g.add(3, "Task", "In Review", parent=2, prs=[dict(OPEN_PR)])
+        pipeline.review_done(self.cfg, WF, 3, "thiếu test cho case rỗng")
+        self.assertEqual((self.st(3), self.g.issues[3]["rework_count"]), ("In Progress", 1))
+        self.assertTrue(any("omi:reviewed" in c for c in self.g.notes[3]))
+
+    def test_resume_after_crash_before_review(self):
+        self.g.add(2, "User Story", "In Progress")
+        self.g.add(3, "Task", "In Review", parent=2, prs=[dict(OPEN_PR)])
+        self.T.mkdir(parents=True)
+        (self.T / "current").write_text("3", encoding="utf-8")
+        (self.T / "review-3.md").write_text("pack", encoding="utf-8")
+        with mock.patch.object(pipeline, "run_cmd", return_value=(0, "")):
+            self.assertEqual(pipeline.resume(self.cfg, WF), "review")
+
+    def test_resume_done_task_clears_current(self):
+        self.g.add(3, "Task", "Done", state="CLOSED")
+        self.T.mkdir(parents=True)
+        (self.T / "current").write_text("3", encoding="utf-8")
+        with mock.patch.object(pipeline, "run_cmd", return_value=(0, "")):
+            self.assertEqual(pipeline.resume(self.cfg, WF), "next")
+        self.assertFalse((self.T / "current").exists())
+
 
 if __name__ == "__main__":
     unittest.main()

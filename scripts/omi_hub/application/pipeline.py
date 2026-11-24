@@ -8,6 +8,7 @@ from omi_hub.config import load_pr_template, load_templates
 from omi_hub.domain.acceptance import accept_verdict, parse_ac
 from omi_hub.domain.errors import RuleError
 from omi_hub.domain.planning import AC_TYPES, pick_next, validate_plan
+from omi_hub.domain.progress import resume_step
 from omi_hub.domain.render import pr_title, render_context, render_plan, render_pr_body, tail
 from omi_hub.domain.security import DEFAULT_SECURITY, needs_security
 from omi_hub.domain.templates import check_pr
@@ -195,3 +196,34 @@ def pr_lint(cfg, pr):
     errs = check_pr(load_pr_template(), title, body)
     print("PR OK" if not errs else "PR FAIL\n" + "\n".join(f"- {e}" for e in errs))
     return 1 if errs else 0
+
+
+def resume(cfg, wf):
+    """Bước tiếp theo của task dở trong `.omi/tmp/current` (phiên trước dừng giữa chừng)."""
+    cur = tmp_dir(cfg) / "current"
+    if not cur.exists():
+        print("RESUME none step=next — không có task dở; `start` để lấy task tiếp.")
+        return None
+    n = int(cur.read_text(encoding="utf-8").strip())
+    s = gh.issue_snapshot(cfg, n)
+    rd, base = repo_dir(cfg), f"origin/{cfg.get('default_branch', 'main')}"
+    _, dirty = run_cmd(["git", "status", "--porcelain"], cwd=rd)
+    _, ahead = run_cmd(["git", "rev-list", "--count", f"{base}..HEAD"], cwd=rd)
+    reviewed = find_marker(gh.comments(cfg, n), "reviewed") is not None
+    step, hint = resume_step(s["status"], bool(dirty.strip()), int(ahead.strip()) if ahead.strip().isdigit() else 0,
+                             reviewed, (tmp_dir(cfg) / f"review-{n}.md").exists())
+    if step == "next":
+        cur.unlink(missing_ok=True)
+    print(f"RESUME #{n} status={s['status']} step={step}\n{hint.replace('<n>', str(n))}")
+    if step in ("code", "submit"):
+        print()
+        context(cfg, n)
+    return step
+
+
+def review_done(cfg, wf, n, fail=None):
+    """Ghi nhận review 1 lượt SAU khi reviewer trả kết quả (resume dựa vào marker này); FAIL → rework."""
+    gh.comment(cfg, n, f"<!-- omi:reviewed -->\n🔎 Review 1 lượt: {'FAIL — ' + fail if fail else 'PASS'}")
+    if fail:
+        items.rework(cfg, wf, n, f"Review: {fail}")
+    print(f"REVIEWED #{n} {'FAIL' if fail else 'PASS'}")
