@@ -1,0 +1,81 @@
+{
+  "max_rework": 3,
+  "statuses": ["Draft", "Triage", "Approved", "Ready", "In Progress", "In Review", "In QA", "Blocked", "Done", "Cancelled"],
+  "terminal": ["Done", "Cancelled"],
+  "human_approval": ["Approved"],
+  "priorities": ["P0", "P1", "P2", "P3"],
+  "types": {
+    "Epic": {
+      "initial": "Draft", "parents": [], "requires": ["milestone"], "on_children_done": "Done",
+      "transitions": [
+        {"from": "Draft", "to": "Approved"},
+        {"from": "Approved", "to": "In Progress"},
+        {"from": "In Progress", "to": "Done", "guards": ["children_terminal"]},
+        {"from": ["Draft", "Approved"], "to": "Cancelled", "guards": ["reason"]},
+        {"from": "In Progress", "to": "Cancelled", "guards": ["reason", "children_terminal"]}
+      ]
+    },
+    "User Story": {
+      "initial": "Draft", "parents": ["Epic"], "requires": ["parent"], "on_children_done": "In QA",
+      "transitions": [
+        {"from": "Draft", "to": "Approved"},
+        {"from": "Approved", "to": "In Progress"},
+        {"from": "In Progress", "to": "In QA", "guards": ["children_terminal"]},
+        {"from": "In QA", "to": "Done"},
+        {"from": ["Draft", "Approved"], "to": "Cancelled", "guards": ["reason"]}
+      ]
+    },
+    "Functional Requirement": {
+      "initial": "Draft", "parents": ["Epic", "User Story"], "requires": ["parent"], "on_children_done": "In QA",
+      "transitions": [
+        {"from": "Draft", "to": "Approved"},
+        {"from": "Approved", "to": "In Progress"},
+        {"from": "In Progress", "to": "In QA", "guards": ["children_terminal"]},
+        {"from": "In QA", "to": "Done"},
+        {"from": ["Draft", "Approved"], "to": "Cancelled", "guards": ["reason"]}
+      ]
+    },
+    "Non-Functional Requirement": {
+      "initial": "Draft", "parents": ["Epic", "User Story", "Functional Requirement"], "requires": ["parent"], "on_children_done": "In QA",
+      "transitions": [
+        {"from": "Draft", "to": "Approved"},
+        {"from": "Approved", "to": "In Progress"},
+        {"from": "In Progress", "to": "In QA", "guards": ["children_terminal"]},
+        {"from": "In QA", "to": "Done"},
+        {"from": ["Draft", "Approved"], "to": "Cancelled", "guards": ["reason"]}
+      ]
+    },
+    "Change Request": {
+      "initial": "Triage", "parents": ["Epic"], "requires": ["parent", "affects"], "on_children_done": "Done",
+      "transitions": [
+        {"from": "Triage", "to": "Approved", "guards": ["impact_analysis"]},
+        {"from": "Triage", "to": "Cancelled", "guards": ["reason"]},
+        {"from": "Approved", "to": "In Progress"},
+        {"from": "In Progress", "to": "Done", "guards": ["children_terminal"]}
+      ]
+    },
+    "Task": {
+      "initial": "Draft", "parents": ["User Story", "Functional Requirement", "Non-Functional Requirement", "Change Request"], "requires": ["parent"],
+      "transitions": [
+        {"from": "Draft", "to": "Ready", "guards": ["parent_ready"]},
+        {"from": "Ready", "to": "In Progress", "guards": ["no_open_blockers"]},
+        {"from": "In Progress", "to": "In Review", "guards": ["pr_open"]},
+        {"from": "In Review", "to": "In QA"},
+        {"from": "In QA", "to": "Done", "guards": ["pr_merged"]},
+        {"from": ["Draft", "Ready", "In Progress"], "to": "Cancelled", "guards": ["reason"]}
+      ]
+    },
+    "Bug": {
+      "initial": "Triage", "parents": [], "requires": ["affects", "milestone"],
+      "transitions": [
+        {"from": "Triage", "to": "Ready"},
+        {"from": "Triage", "to": "Cancelled", "guards": ["reason"]},
+        {"from": "Ready", "to": "In Progress", "guards": ["no_open_blockers"]},
+        {"from": "In Progress", "to": "In Review", "guards": ["pr_open"]},
+        {"from": "In Review", "to": "In QA"},
+        {"from": "In QA", "to": "Done", "guards": ["pr_merged"]},
+        {"from": ["Ready", "In Progress"], "to": "Cancelled", "guards": ["reason"]}
+      ]
+    }
+  }
+}
