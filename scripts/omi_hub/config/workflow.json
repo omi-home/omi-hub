@@ -21,7 +21,7 @@
         {"from": "Draft", "to": "Approved"},
         {"from": "Approved", "to": "In Progress"},
         {"from": "In Progress", "to": "In QA", "guards": ["children_terminal"]},
-        {"from": "In QA", "to": "Done"},
+        {"from": "In QA", "to": "Done", "guards": ["children_terminal"]},
         {"from": ["Draft", "Approved"], "to": "Cancelled", "guards": ["reason"]}
       ]
     },
@@ -31,7 +31,7 @@
         {"from": "Draft", "to": "Approved"},
         {"from": "Approved", "to": "In Progress"},
         {"from": "In Progress", "to": "In QA", "guards": ["children_terminal"]},
-        {"from": "In QA", "to": "Done"},
+        {"from": "In QA", "to": "Done", "guards": ["children_terminal"]},
         {"from": ["Draft", "Approved"], "to": "Cancelled", "guards": ["reason"]}
       ]
     },
@@ -41,7 +41,7 @@
         {"from": "Draft", "to": "Approved"},
         {"from": "Approved", "to": "In Progress"},
         {"from": "In Progress", "to": "In QA", "guards": ["children_terminal"]},
-        {"from": "In QA", "to": "Done"},
+        {"from": "In QA", "to": "Done", "guards": ["children_terminal"]},
         {"from": ["Draft", "Approved"], "to": "Cancelled", "guards": ["reason"]}
       ]
     },

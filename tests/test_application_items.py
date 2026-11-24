@@ -101,6 +101,13 @@ class TestFlow(unittest.TestCase):
             items.move(CFG, WF, 3, "Done")
         self.assertEqual(self.st(3), "In QA")
 
+    def test_story_done_blocked_by_child_added_during_qa(self):
+        self.g.add(2, "User Story", "In QA")
+        self.g.add(3, "Task", "Draft", parent=2)  # con thêm sau khi story vào QA
+        with self.assertRaisesRegex(RuleError, "con chưa Done"):
+            items.move(CFG, WF, 2, "Done")
+        self.assertEqual(self.st(2), "In QA")
+
     def test_rework_counts_and_comments(self):
         self.g.add(2, "User Story", "In Progress")
         self.g.add(3, "Task", "In Review", parent=2)
