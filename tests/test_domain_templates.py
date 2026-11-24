@@ -91,6 +91,12 @@ class TestPrTemplate(unittest.TestCase):
     def test_valid(self):
         self.assertEqual(templates.check_pr(PR_TPL, "[Task] Thêm API POST /orders (#12)", PR_BODY), [])
 
+    def test_option_then_trailing_text(self):
+        body = PR_BODY + "
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)"
+        self.assertEqual(templates.check_pr(PR_TPL, "[Task] Thêm API POST /orders (#12)", body), [])
+
     def test_invalid(self):
         errs = templates.check_pr(PR_TPL, "Thêm API", PR_BODY.replace("Closes #12", "liên quan task"))
         self.assertTrue(any("Title PR" in e for e in errs))
