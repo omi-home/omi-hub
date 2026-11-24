@@ -1,5 +1,6 @@
 """Branch phát triển của issue và Pull Request."""
 import json
+import re
 
 from . import client
 
@@ -35,7 +36,21 @@ def pr_checks(cfg, pr):
     except client.GhError as e:
         if "no checks reported" in str(e).lower():
             return None, ""
-        return False, str(e)
+        return False, str(e) + _failed_logs(cfg, str(e))
+
+
+def _failed_logs(cfg, table, lines=60):
+    """Nguyên nhân fail: tail `gh run view --log-failed` của từng run có check fail."""
+    runs = dict.fromkeys(m.group(1) for row in table.splitlines() if "\tfail\t" in row
+                         for m in [re.search(r"/actions/runs/(\d+)", row)] if m)
+    out = []
+    for run in runs:
+        try:
+            log = client.run(["run", "view", run, "-R", client.repo_full(cfg), "--log-failed"])
+        except client.GhError as e:
+            log = str(e)
+        out.append(f"\n\n## Run {run} (log-failed)\n" + "\n".join(log.splitlines()[-lines:]))
+    return "".join(out)
 
 
 def merge_pr(cfg, pr):
