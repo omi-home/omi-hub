@@ -21,7 +21,7 @@ Ngoài phạm vi v1: tài khoản cá nhân (không có Issue Types), một Proj
 
 | # | Quyết định | Lý do |
 |---|---|---|
-| D1 | Repo thuộc **Organization**, Work Item Type = **Issue Types gốc** | Hiển thị trên issue, filter `type:`, Projects có cột Type sẵn |
+| D1 | Repo thuộc **Organization**, Work Item Type = **Issue Types gốc** | Hiển thị trên issue, filter `type:`; Project không có field Type qua API → omi đọc `issueType` của issue |
 | D2 | **Một** trường `Status` chung (hợp các trạng thái), plugin ràng buộc theo loại | Project chỉ có 1 Status; board/view và built-in automation dùng chung được |
 | D3 | Thực thi rule ở **plugin** (chặn) + **GitHub Action** (audit) | Claude không đi tắt được; sửa tay trên web vẫn được phát hiện |
 | D4 | **1 Project / 1 repo** | Khớp với Milestone (cấp repo) |
@@ -499,7 +499,7 @@ Kết quả ghi vào một issue duy nhất "OMI Audit" (tạo nếu chưa có, 
 | Sub-issues API (`addSubIssue`, đọc children) | Điều kiện tiên quyết |
 | Issue dependencies API (blocked-by) | Dùng mục `### Blocked by` trong body |
 | `gh project copy` giữ views + built-in workflows | Views: giữ ✓, thiếu thì tạo bằng REST `projectsV2/{n}/views`. Workflow Auto-add: không giữ → plugin tự thêm item |
-| Projects có cột Type cho issue types — **`field-list` không trả field Type** (2026-11-24); kiểm trên UI | Thêm field single-select `Work Item Type`, plugin đồng bộ |
+| Projects có cột Type cho issue types — ✗ `field-list` và GraphQL `fields` không trả field Type (spike mục 6) | Không dùng field Type trong Project: type lấy từ `issueType` của issue (snapshot, audit, tree) |
 | ✓ 2026-11-24: tạo Issue Type tên dài; issue với `type` (REST); `POST sub_issues`; `updateProjectV2Field` options Status | — |
 | Gắn sub-issue cho item đã trong Project → GitHub **tự thêm** vào Project (bất đồng bộ), `addProjectV2ItemById` lỗi `Content already exists` (2026-11-24) | `add_to_project` bắt lỗi này, tìm lại item, thử lại |
 | Action trigger `issues: typed` | Bỏ trigger đó, dựa vào cron |
