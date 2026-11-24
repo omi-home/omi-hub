@@ -11,7 +11,7 @@
 > - `rules.sections/prefix/with_prefix/check_template/check_pr/fill/skeleton` → `omi_hub.domain.templates`
 - `rules.RuleError` → `omi_hub.domain.errors`; transition/Blocked/`BLOCKED`/`is_terminal`/`needs_human` → `omi_hub.domain.lifecycle`
 > - rework → `domain/rework.py`; quan hệ cha–con, rollup → `domain/relations.py`; guards → `domain/guards.py`; invariants → `domain/audit.py`; chọn next → `domain/planning.py` (cùng `validate_plan`)
-> - `gh.py` → `omi_hub/infrastructure/gh.py`; lệnh trong `omi.py` → `omi_hub/application/<nhóm lệnh>.py` + `omi_hub/cli/`; helper text thuần → `omi_hub/domain/text.py`
+> - `gh.*` → `omi_hub/infrastructure/github/`: `client` (`GhError`, `run`, `graphql`, `rest`, `repo_path`=`_r`, `repo_full`=`_repo`), `nodes` (helper đọc node GraphQL), `issues` (snapshot, thao tác issue, comment, audit issue, `AUDIT_TITLE`), `project` (`FIELD_KINDS`, items, field, add item), `milestones`, `bootstrap` (Issue Types, project, fields, label, variable); test mock `client.graphql`/`client.run`; lệnh trong `omi.py` → `omi_hub/application/<nhóm lệnh>.py` + `omi_hub/cli/`; helper text thuần → `omi_hub/domain/text.py`
 > - Test: `tests/test_<layer>_<module>.py`, import `from omi_hub.<layer> import <module>`. GitHub Action chạy `omi.py audit` để kiểm tra bất biến khi người sửa tay trên web.
 
 **Tech Stack:** Python ≥ 3.11 stdlib (`json`, `re`, `subprocess`, `argparse`, `unittest`), `gh` CLI ≥ 2.60, GitHub REST + GraphQL (Issue Types, sub-issues, issue dependencies, Projects v2), Claude Code plugin (skills, hooks, agents).
@@ -41,7 +41,7 @@
 | `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json` | Manifest plugin + marketplace để cài |
 | `scripts/omi_hub/config/` | `workflow.json` (types, statuses, transitions, parents, requires, rollup), templates JSON, hàm nạp |
 | `scripts/omi_hub/domain/` | Luật thuần: `errors`, `lifecycle` (transition, blocked), `rework`, `relations` (quan hệ, rollup), `guards`, `audit`, `planning` (next, validate plan), `text` |
-| `scripts/omi_hub/infrastructure/gh.py` | Gọi `gh`: GraphQL/REST, snapshot issue, project items, ghi field, tạo issue, bootstrap |
+| `scripts/omi_hub/infrastructure/github/` | Gọi `gh`: GraphQL/REST, snapshot issue, project items, ghi field, tạo issue, bootstrap |
 | `scripts/omi_hub/application/`, `scripts/omi_hub/cli/`, `scripts/omi.py` (entrypoint) | CLI: init, new, move, rework, block, unblock, tree, next, apply, plan-show, audit, context, start, check, submit, review-done, qa, accept, impact, status, resume, template, pr-lint; helper text thuần |
 | `hooks/hooks.json`, `hooks/guard.py` | PreToolUse chặn đi tắt / hỏi khi Approved; SessionStart in `OMI_CLI` (1 dòng) |
 | `skills/omi-{plan,implement,change}/SKILL.md` | 3 việc cần LLM: phân rã PRD, vòng implement, Change Request/Bug |
