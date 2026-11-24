@@ -119,7 +119,7 @@ Mở issue từ form trên web → kiểm tra issue có type Task; đổi type m
 
 - [ ] **Step 9: Cơ chế plugin**
 
-Tạo plugin tối thiểu tạm trong scratchpad: `hooks/hooks.json` SessionStart chạy `python -c "import os;print('ROOT='+os.environ.get('CLAUDE_PLUGIN_ROOT','MISSING'))"` và `agents/probe.md` có `memory: project`. Chạy `claude --plugin-dir <thư mục>` trong sandbox clone, gọi agent probe yêu cầu nó ghi 1 dòng vào memory. Ghi lại: `ROOT=` có giá trị; thư mục `.claude/agent-memory/probe/` có được tạo.
+Tạo plugin tối thiểu tạm trong scratchpad: `hooks/hooks.json` SessionStart chạy `python -c "import os;print('ROOT='+os.environ.get('CLAUDE_PLUGIN_ROOT','MISSING'))"` và `agents/probe.md` có `memory: project`. Chạy `claude --plugin-dir <thư mục>` trong sandbox clone, gọi agent probe yêu cầu nó ghi 1 dòng vào memory. Ghi lại: `ROOT=` có giá trị; thư mục `.claude/agent-memory/probe-probe/` có được tạo (plugin-agent).
 
 - [ ] **Step 10: Ghi kết quả**
 
@@ -3779,7 +3779,7 @@ description: Làm một Task/Bug omi tới Done (start → code → check → su
 1. Đầu phiên đã có dòng `RESUME` → làm theo skill omi-resume. Nếu không: `OMI_CLI start [n]` → `START #n` (hoặc `NONE`: báo và dừng), rồi `OMI_CLI context n`.
 2. TDD: test trước (Bug: test tái hiện; AC của parent #p: test tên chứa `ac<p>_<i>`), rồi code. Chỉ đọc file cần thiết. Lặp `OMI_CLI check` tới `CHECK PASS`. Commit `#n: <tóm tắt>`.
 3. `OMI_CLI submit n` → `REVIEW #n PR #pr pack=<f> reviewers=<...>`.
-4. Nếu `reviewers` khác `none`: gọi song song `omi-reviewer` và (nếu có `security`) `omi-security-reviewer`, prompt đúng một dòng `Pack: <f>`.
+4. Nếu `reviewers` khác `none`: gọi song song subagent `omi-hub:omi-reviewer` và (nếu có `security`) `omi-hub:omi-security-reviewer`, prompt đúng một dòng `Pack: <f>`.
    - Mỗi `IMPROVE:` → `OMI_CLI new Task "<gợi ý ngắn>" --parent <parent của n> --field "Việc cần làm=<gợi ý>"` (Draft). Không làm trong task này.
    - Không có `BLOCKER:` → `OMI_CLI review-done n`.
    - Có `BLOCKER:` → `OMI_CLI review-done n --fail "<blocker gộp ≤ 3 dòng>"` (script ghi nhận + rework) → sửa → `check` → `submit n` (lần này `reviewers=none`, không review lại).
