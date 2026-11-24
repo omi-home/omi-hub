@@ -29,7 +29,7 @@ Ngoài phạm vi v1: tài khoản cá nhân (không có Issue Types), một Proj
 | D6 | Vòng implement **tự động hoàn toàn** (kể cả merge), phanh an toàn: rework > 3 → Blocked. Review = **code review LLM đúng 1 lượt** + **security review LLM 1 lượt khi script phát hiện** task chạm security; **không có vòng review thứ hai** (script thực thi: chỉ `submit` đầu tiên yêu cầu review); gợi ý cải tiến thành Task Draft, không chặn. QA Task/Bug = **script** (test + CI). Nghiệm thu Story/Functional Requirement/Non-Functional Requirement = **script** (mỗi AC ↔ một test tên `ac<số issue>_<thứ tự>`) | Theo yêu cầu; phanh tránh vòng lặp vô hạn |
 | D7 | Chốt baseline (`Approved`) cho Epic/Story/Functional Requirement/Non-Functional Requirement/Change Request **luôn do người** | Baseline là cam kết; Change Request chỉ có nghĩa khi baseline do người chốt |
 | D8 | `AGENTS.md` là file hướng dẫn agent duy nhất (Claude Code nạp trực tiếp), **không** tạo `CLAUDE.md` | Theo yêu cầu |
-| D9 | Memory dùng cơ chế gốc: subagent `memory: project` → `.claude/agent-memory/<agent>/` | Không tự chế memory |
+| D9 | Memory dùng cơ chế gốc: subagent `memory: project` → `.claude/agent-memory/<plugin>-<agent>/` (vd. `omi-hub-omi-reviewer/`) | Không tự chế memory |
 | D10 | **Script-first, ưu tiên hàng đầu với mọi yêu cầu mới: việc gì script làm được thì không dùng LLM** (mục 2.1) | Theo yêu cầu; tối ưu token |
 | D12 | **Mô hình workspace**: `AGENTS.md`, `.claude/`, `.omi/` ở thư mục workspace; repo git là thư mục con, chỉ chứa code/docs/`.github/` (mục 5.4) | Tách công cụ agent khỏi mã sản phẩm |
 | D11 | **Phiên chính tự viết code và tự sửa** (không tách subagent viết code). Ngữ cảnh mới mỗi task bằng `/clear` + `context N` | Tách vai trò làm mất ngữ cảnh ở mỗi lần chuyển việc → đọc lại codebase, review không hội tụ, rework dây chuyền; thực tế tốn quota hơn |
@@ -411,9 +411,9 @@ Chạy từ thư mục workspace: `OMI_CLI init --repo-dir <repo>`. Tham số th
 
 1. Kiểm tra: `gh auth` có scope `project, repo, admin:org`; repo (trong `--repo-dir`) thuộc org.
 2. Tạo Issue Types còn thiếu (REST `/orgs/{org}/issue-types`).
-3. Tạo Project bằng `gh project copy` từ **Project mẫu** của org (mang theo fields, views, built-in workflows). Nếu đã có Project gắn repo với tiêu đề chuẩn → dùng lại.
+3. Tạo Project bằng `gh project copy` từ **Project mẫu** của org (mang theo fields, views; **không** mang workflow `Auto-add to project`). Nếu đã có Project gắn repo với tiêu đề chuẩn → dùng lại.
 4. Link Project với repo; đảm bảo field Priority/Estimate/Rework Count/Blocked Reason và đủ option Status (tạo bù nếu thiếu).
-5. Bật built-in workflows: auto-add issue của repo, item closed → không đổi (plugin tự quản Done/Cancelled).
+5. Built-in workflows: không có API. Plugin tự thêm item vào Project (`add_to_project`), không phụ thuộc Auto-add; `init` in hướng dẫn bật Auto-add trên UI nếu muốn. Item closed → không đổi (plugin tự quản Done/Cancelled).
 6. Workspace: ghi `.omi/project.json`, `AGENTS.md` (merge mục omi nếu file đã có). Repo: issue forms, PR template, workflow audit. Repo variable `OMI_CONFIG` = config (cho Action). Label `security`.
 7. Tùy chọn tạo milestone đầu.
 8. In checklist việc người phải làm: tạo secret `OMI_PROJECT_TOKEN`.
@@ -495,7 +495,7 @@ Kết quả ghi vào một issue duy nhất "OMI Audit" (tạo nếu chưa có, 
 | REST tạo issue type cho org và gán type cho issue | Không có phương án thay; điều kiện tiên quyết |
 | Sub-issues API (`addSubIssue`, đọc children) | Điều kiện tiên quyết |
 | Issue dependencies API (blocked-by) | Dùng mục `### Blocked by` trong body |
-| `gh project copy` giữ views + built-in workflows | Tạo views thủ công một lần theo hướng dẫn trong docs |
+| `gh project copy` giữ views + built-in workflows | Views: giữ ✓, thiếu thì tạo bằng REST `projectsV2/{n}/views`. Workflow Auto-add: không giữ → plugin tự thêm item |
 | Projects có cột Type cho issue types — **`field-list` không trả field Type** (2026-11-24); kiểm trên UI | Thêm field single-select `Work Item Type`, plugin đồng bộ |
 | ✓ 2026-11-24: tạo Issue Type tên dài; issue với `type` (REST); `POST sub_issues`; `updateProjectV2Field` options Status | — |
 | Gắn sub-issue cho item đã trong Project → GitHub **tự thêm** vào Project (bất đồng bộ), `addProjectV2ItemById` lỗi `Content already exists` (2026-11-24) | `add_to_project` bắt lỗi này, tìm lại item, thử lại |
