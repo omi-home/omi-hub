@@ -126,6 +126,14 @@ class TestIssueOps(unittest.TestCase):
             issues.upsert_audit_issue(self.CFG, "body")
             self.assertEqual(r.call_args.args[:2], ("POST", "repos/o/r/issues"))
 
+    def test_close_tolerates_already_closed(self):
+        err = client.GhError("gh api -X PATCH: gh: Validation Failed (HTTP 422)")
+        with mock.patch.object(client, "rest", side_effect=[err, {"state": "closed"}]):
+            issues.close(self.CFG, 2, "completed")  # Project đã tự đóng → không lỗi
+        with mock.patch.object(client, "rest", side_effect=[err, {"state": "open"}]):
+            with self.assertRaises(client.GhError):
+                issues.close(self.CFG, 2, "completed")
+
 
 if __name__ == "__main__":
     unittest.main()

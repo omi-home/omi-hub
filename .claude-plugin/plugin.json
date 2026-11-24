@@ -2,5 +2,8 @@
   "name": "omi-hub",
   "version": "0.1.0",
   "description": "Quy trình dự án chuẩn trên GitHub Projects cho Claude Code, tối ưu token: script làm mọi việc tất định.",
-  "author": {"name": "omi-home"}
+  "author": {
+    "name": "omi-home"
+  },
+  "license": "MIT"
 }

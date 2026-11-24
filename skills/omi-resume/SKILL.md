@@ -1,6 +1,6 @@
 ---
 name: omi-resume
-description: Tiếp tục task omi còn dở của phiên trước (tạm dừng, chạm limit): script xác định bước tiếp theo rồi làm tiếp theo omi-implement.
+description: "Tiếp tục task omi còn dở của phiên trước (tạm dừng, chạm limit): script xác định bước tiếp theo rồi làm tiếp theo omi-implement."
 ---
 
 `OMI_CLI` = lệnh ở dòng `OMI_CLI:` đầu phiên. Không đọc lại lịch sử phiên trước; trạng thái nằm trên GitHub + git + `.omi/tmp/`.
