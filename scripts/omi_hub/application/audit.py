@@ -3,6 +3,12 @@ from omi_hub.domain.audit import check_invariants
 from omi_hub.infrastructure.github import gateway as gh
 
 
+def _fresh(cfg, item):
+    """Issue đọc lại từ GitHub, theo dạng item của project_items."""
+    s = gh.issue_snapshot(cfg, item["number"])
+    return dict(s, in_project=s["item_id"] is not None, parent=s["parent"]["number"] if s["parent"] else None)
+
+
 def apply_fix(cfg, item, fix):
     kind, val = fix
     if kind == "add":
@@ -26,8 +32,10 @@ def audit(cfg, wf, fix=False):
     for it in items:
         for p in check_invariants(wf, it, by):
             done = bool(fix and p["fix"])
-            if done:
-                apply_fix(cfg, it, p["fix"])
+            if done:  # snapshot có thể cũ (apply/move đang chạy song song): đọc lại, chỉ sửa nếu vi phạm còn
+                cur = _fresh(cfg, it)
+                if p["fix"] in [q["fix"] for q in check_invariants(wf, cur, by)]:
+                    apply_fix(cfg, cur, p["fix"])
             unfixed += not done
             lines.append(f"- [{'x' if done else ' '}] #{p['number']}: {p['problem']}"
                          + (" (đã tự sửa)" if done else ""))
