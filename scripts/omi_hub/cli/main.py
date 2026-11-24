@@ -3,7 +3,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from omi_hub.application import items, views
+from omi_hub.application import items, setup, views
 from omi_hub.application.workspace import load_cfg
 from omi_hub.config import load_templates, load_workflow
 from omi_hub.domain.errors import RuleError
@@ -22,6 +22,15 @@ def _nums(s):
 def build_parser():
     ap = argparse.ArgumentParser(prog="omi")
     sub = ap.add_subparsers(dest="cmd", required=True)
+    p = sub.add_parser("init")
+    p.add_argument("--milestone")
+    p.add_argument("--from-template", type=int)
+    p.add_argument("--template-only", action="store_true")
+    p.add_argument("--hub-repo", default="omi-home/omi-hub")
+    p.add_argument("--test-cmd")
+    p.add_argument("--lint-cmd")
+    p.add_argument("--accept-cmd")
+    p.add_argument("--repo-dir", default=".", help="repo git, tương đối với workspace (cwd)")
     p = sub.add_parser("new")
     p.add_argument("type")
     p.add_argument("title")
@@ -55,6 +64,10 @@ def build_parser():
 
 
 def run(a, wf):
+    if a.cmd == "init":
+        setup.init(wf, a.milestone, a.from_template, a.template_only, a.hub_repo,
+                   a.test_cmd, a.lint_cmd, a.accept_cmd, a.repo_dir)
+        return 0
     if a.cmd == "template":
         print(skeleton(load_templates(), a.type))
         return 0
