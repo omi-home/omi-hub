@@ -4,7 +4,14 @@
 
 **Goal:** Plugin Claude Code `omi-hub` bootstrap và vận hành quy trình dự án chuẩn (cây Epic → Story/Functional Requirement/Non-Functional Requirement/Change Request → Task, Bug) trên GitHub Projects, có lifecycle theo loại, rework, rollup, audit.
 
-**Architecture:** Plugin gồm skills + hooks + 2 subagent + một CLI Python stdlib (`scripts/omi.py`). CLI tách 3 lớp: `rules.py` (luật thuần, không I/O, test đầy đủ), `gh.py` (nơi duy nhất gọi `gh` CLI), `omi.py` (điều phối lệnh). Luật khai báo trong `workflow.json`. GitHub Action chạy `omi.py audit` để kiểm tra bất biến khi người sửa tay trên web.
+**Architecture:** Plugin gồm skills + hooks + 2 subagent + một CLI Python stdlib (`scripts/omi.py`). Core là package `scripts/omi_hub/` theo clean architecture (phụ thuộc chỉ đi vào trong): `domain/` (luật thuần, không I/O, test đầy đủ), `config/` (`workflow.json`, templates + hàm nạp), `infrastructure/` (nơi duy nhất gọi `gh` CLI), `application/` (use case điều phối), `cli/` (argparse, output); `scripts/omi.py` chỉ là entrypoint mỏng. Luật khai báo trong `config/workflow.json`.
+
+> **Ánh xạ tên trong plan (đổi từ Task 002):** code mẫu các task sau viết theo bố cục phẳng cũ — khi làm, đặt vào module tương ứng, mỗi module một trách nhiệm:
+> - `rules.load_workflow`, `rules.load_templates`, `workflow.json`, `templates.json`, `pr_template.json` → `omi_hub.config`
+> - `rules.RuleError` → `omi_hub.domain.errors`; transition/Blocked/`BLOCKED`/`is_terminal`/`needs_human` → `omi_hub.domain.lifecycle`
+> - rework → `domain/rework.py`; quan hệ cha–con, rollup → `domain/relations.py`; guards → `domain/guards.py`; invariants → `domain/audit.py`; chọn next → `domain/planning.py` (cùng `validate_plan`)
+> - `gh.py` → `omi_hub/infrastructure/gh.py`; lệnh trong `omi.py` → `omi_hub/application/<nhóm lệnh>.py` + `omi_hub/cli/`; helper text thuần → `omi_hub/domain/text.py`
+> - Test: `tests/test_<layer>_<module>.py`, import `from omi_hub.<layer> import <module>`. GitHub Action chạy `omi.py audit` để kiểm tra bất biến khi người sửa tay trên web.
 
 **Tech Stack:** Python ≥ 3.11 stdlib (`json`, `re`, `subprocess`, `argparse`, `unittest`), `gh` CLI ≥ 2.60, GitHub REST + GraphQL (Issue Types, sub-issues, issue dependencies, Projects v2), Claude Code plugin (skills, hooks, agents).
 
@@ -31,10 +38,10 @@
 | File | Trách nhiệm |
 |---|---|
 | `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json` | Manifest plugin + marketplace để cài |
-| `scripts/workflow.json` | Khai báo types, statuses, transitions, parents, requires, rollup |
-| `scripts/rules.py` | Luật thuần: transition, blocked, rework, quan hệ, guards, rollup, audit invariants, chọn next, validate plan |
-| `scripts/gh.py` | Gọi `gh`: GraphQL/REST, snapshot issue, project items, ghi field, tạo issue, bootstrap |
-| `scripts/omi.py` | CLI: init, new, move, rework, block, unblock, tree, next, apply, plan-show, audit, context, start, check, submit, review-done, qa, accept, impact, status, resume, template, pr-lint; helper text thuần |
+| `scripts/omi_hub/config/` | `workflow.json` (types, statuses, transitions, parents, requires, rollup), templates JSON, hàm nạp |
+| `scripts/omi_hub/domain/` | Luật thuần: `errors`, `lifecycle` (transition, blocked), `rework`, `relations` (quan hệ, rollup), `guards`, `audit`, `planning` (next, validate plan), `text` |
+| `scripts/omi_hub/infrastructure/gh.py` | Gọi `gh`: GraphQL/REST, snapshot issue, project items, ghi field, tạo issue, bootstrap |
+| `scripts/omi_hub/application/`, `scripts/omi_hub/cli/`, `scripts/omi.py` (entrypoint) | CLI: init, new, move, rework, block, unblock, tree, next, apply, plan-show, audit, context, start, check, submit, review-done, qa, accept, impact, status, resume, template, pr-lint; helper text thuần |
 | `hooks/hooks.json`, `hooks/guard.py` | PreToolUse chặn đi tắt / hỏi khi Approved; SessionStart in `OMI_CLI` (1 dòng) |
 | `skills/omi-{plan,implement,change}/SKILL.md` | 3 việc cần LLM: phân rã PRD, vòng implement, Change Request/Bug |
 | `skills/omi-{status,resume}/SKILL.md` | Lớp mỏng gọi `status` / `resume` (logic nằm trong CLI) |
@@ -156,10 +163,11 @@ Nếu mục 1–4 thất bại: dừng, báo người dùng, cập nhật spec. 
 ### Task 002: Khung plugin, `workflow.json`, transitions và Blocked
 
 **Files:**
-- Create: `.gitignore`, `scripts/workflow.json`, `scripts/rules.py`, `tests/test_rules.py`
+- Create: `scripts/omi_hub/__init__.py`, `scripts/omi_hub/config/{__init__.py,workflow.json}`, `scripts/omi_hub/domain/{__init__.py,errors.py,lifecycle.py}`, `tests/test_domain_lifecycle.py`
 
 **Interfaces:**
-- Produces: `rules.load_workflow(path=WORKFLOW_PATH) -> dict`, `rules.RuleError(errors: str|list[str])` có `.errors: list[str]`, `rules.BLOCKED = "Blocked"`, `rules.allowed_statuses(wf, type_) -> set[str]`, `rules.is_terminal(wf, status) -> bool`, `rules.needs_human(wf, target) -> bool`, `rules.transition(wf, type_, current, target, blocked_from=None) -> list[str]` (tên guard).
+- Produces: `omi_hub.config.load_workflow(path=WORKFLOW_PATH) -> dict`; `omi_hub.domain.errors.RuleError(errors: str|list[str])` có `.errors: list[str]`; `omi_hub.domain.lifecycle`: `BLOCKED = "Blocked"`, `allowed_statuses(wf, type_) -> set[str]`, `is_terminal(wf, status) -> bool`, `needs_human(wf, target) -> bool`, `transition(wf, type_, current, target, blocked_from=None) -> list[str]` (tên guard).
+- Đã làm (2026-11-24): code đặt theo layer (xem "Ánh xạ tên" ở đầu plan); nội dung code mẫu dưới đây giữ nguyên.
 
 - [ ] **Step 1: Khởi tạo git cho `omi-hub/`** (xác nhận với người dùng trước nếu chưa có repo)
 
