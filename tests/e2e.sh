@@ -7,6 +7,9 @@ OMI="python $1/scripts/omi.py"
 $OMI init --repo-dir repo --milestone "e2e" \
   --test-cmd "python -c \"import os,sys; sys.exit(not os.path.exists('e2e.txt'))\"" \
   --accept-cmd "python -c \"print('test_ac{n}_1 ok')\""
+# Việc của người sau init: commit .github/ (repo trống cần commit gốc để `gh issue develop` tạo branch)
+git -C repo add .github && git -C repo commit -m "chore: omi init" && git -C repo branch -M main
+git -C repo push -u origin main
 
 cat > /tmp/omi-e2e-plan.json <<'EOF'
 {"milestone": "e2e", "items": [
@@ -31,7 +34,7 @@ $OMI check | grep -q "CHECK PASS"
 SUB=$($OMI submit "$T"); echo "$SUB" | grep -q "reviewers=code"
 PR=$(echo "$SUB" | grep -oE 'PR #[0-9]+' | grep -oE '[0-9]+')
 $OMI pr-lint "$PR" | grep -q "PR OK"              # PR do script sinh đúng template
-$OMI rework "$T" --reason "e2e rework"
+$OMI review-done "$T" --fail "e2e rework"     # review FAIL: ghi marker + rework
 $OMI submit "$T" | grep -q "reviewers=none"       # review LLM chỉ 1 lượt
 $OMI qa "$T" | tee /tmp/omi-e2e-qa.out
 grep -q "DONE #$T" /tmp/omi-e2e-qa.out
