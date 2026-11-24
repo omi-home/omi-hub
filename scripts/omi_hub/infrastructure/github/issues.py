@@ -94,7 +94,7 @@ def close(cfg, n, reason):
     try:
         client.rest("PATCH", path, {"state": "closed", "state_reason": reason})
     except client.GhError:
-        # workflow "Auto-close issue" của Project có thể đã đóng issue ngay khi Status → Done (PATCH trả 422)
+        # E2E: PATCH trả 422 dù issue đã đóng (nguyên nhân chưa xác định) → chỉ lỗi thật khi issue vẫn mở
         if (client.rest("GET", path) or {}).get("state") != "closed":
             raise
 
