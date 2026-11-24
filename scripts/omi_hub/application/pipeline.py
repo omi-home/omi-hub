@@ -1,5 +1,6 @@
 """Use case pipeline một task: context → start → check → submit → qa → accept; impact, plan-show, pr-lint."""
 import json
+import time
 from pathlib import Path
 
 from omi_hub.application import items
@@ -18,10 +19,19 @@ from omi_hub.infrastructure.shell import run_cmd
 
 
 CHECK_STEPS = ("lint", "typecheck", "scan", "test")
+LINK_WAIT = (1, 2, 4, 8)  # giây chờ GitHub liên kết PR mới vào issue (closedByPullRequestsReferences)
 
 
 def _open_pr(snap):
     return next((p["number"] for p in snap["prs"] if p["state"] == "OPEN"), None)
+
+
+def _wait_linked(cfg, n):
+    for delay in (0, *LINK_WAIT):
+        time.sleep(delay)
+        if _open_pr(gh.issue_snapshot(cfg, n)):
+            return
+    raise RuleError(f"GitHub chưa liên kết PR vào #{n} sau {sum(LINK_WAIT)}s — chạy lại `submit {n}` (không tạo PR trùng)")
 
 
 def context(cfg, n):
@@ -86,11 +96,14 @@ def submit(cfg, wf, n):
     sec = needs_security(files.split(), s["labels"] + (parent["labels"] if parent else []), parent,
                          cfg.get("security_paths", DEFAULT_SECURITY))
     pr = _open_pr(s)
+    if pr is None:
+        _, head = run_cmd(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=repo_dir(cfg))
+        pr = gh.open_pr_for_branch(cfg, head.strip())  # PR đã tạo nhưng issue chưa kịp liên kết → không tạo trùng
     if pr is None:  # title + body PR theo pr_template.json, do script sinh
         _, log = run_cmd(["git", "log", "--format=%s", f"{base}..HEAD"], cwd=repo_dir(cfg))
-        _, head = run_cmd(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=repo_dir(cfg))
         pr = gh.create_pr(cfg, pr_title(s), render_pr_body(s, parent, log.splitlines(), sec), head.strip())
     if s["status"] == "In Progress":
+        _wait_linked(cfg, n)  # guard In Review cần PR đã liên kết
         items.move(cfg, wf, n, "In Review")
     reviewers = []
     if find_marker(gh.comments(cfg, n), "reviewed") is None:  # review LLM chỉ 1 lượt mỗi task

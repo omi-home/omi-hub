@@ -20,6 +20,13 @@ def create_pr(cfg, title, body, head):
     return int(url.rstrip("/").split("/")[-1])
 
 
+def open_pr_for_branch(cfg, head):
+    """PR đang mở từ branch: không phụ thuộc liên kết issue (GitHub cập nhật trễ)."""
+    out = client.run(["pr", "list", "-R", client.repo_full(cfg), "--head", head, "--state", "open", "--json", "number"])
+    prs = json.loads(out or "[]")
+    return prs[0]["number"] if prs else None
+
+
 def pr_view(cfg, pr):
     d = json.loads(client.run(["pr", "view", str(pr), "-R", client.repo_full(cfg), "--json", "title,body"]))
     return d["title"], d["body"]
