@@ -3,7 +3,7 @@ import unittest
 from unittest import mock
 
 import support  # noqa: F401  (sys.path)
-from omi_hub.infrastructure.github import client, issues, project
+from omi_hub.infrastructure.github import client, issues, project, pulls
 
 PID = "PROJ"
 
@@ -125,6 +125,24 @@ class TestIssueOps(unittest.TestCase):
         with mock.patch.object(issues, "repo_issues", return_value=[]), mock.patch.object(client, "rest") as r:
             issues.upsert_audit_issue(self.CFG, "body")
             self.assertEqual(r.call_args.args[:2], ("POST", "repos/o/r/issues"))
+
+    def test_pr_checks_fail_appends_failed_run_log(self):
+        table = ("gh pr checks 4: pr-lint\tfail\t4s\thttps://github.com/o/r/actions/runs/77/job/1\t\n"
+                 "audit\tskipping\t0\thttps://github.com/o/r/actions/runs/88/job/2\t\n"
+                 "pr-lint\tfail\t4s\thttps://github.com/o/r/actions/runs/77/job/1\t")
+        calls = []
+
+        def fake(args, **kw):
+            calls.append(args)
+            if args[:2] == ["pr", "checks"]:
+                raise client.GhError(table)
+            return "pr-lint\tcheckout\t##[error]Input required and not supplied: token"
+
+        with mock.patch.object(client, "run", side_effect=fake):
+            ok, out = pulls.pr_checks(self.CFG, 4)
+        self.assertFalse(ok)
+        self.assertIn("Input required and not supplied: token", out)
+        self.assertEqual([c[2] for c in calls if c[0] == "run"], ["77"])  # chỉ run fail, không trùng
 
     def test_close_tolerates_already_closed(self):
         err = client.GhError("gh api -X PATCH: gh: Validation Failed (HTTP 422)")
