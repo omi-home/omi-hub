@@ -8,7 +8,7 @@ def _as_list(v):
     return v if isinstance(v, list) else [v]
 
 
-def _type(wf, type_):
+def type_def(wf, type_):
     try:
         return wf["types"][type_]
     except KeyError:
@@ -16,7 +16,7 @@ def _type(wf, type_):
 
 
 def allowed_statuses(wf, type_):
-    t = _type(wf, type_)
+    t = type_def(wf, type_)
     out = {t["initial"], BLOCKED}
     for tr in t["transitions"]:
         out.update(_as_list(tr["from"]))
@@ -46,7 +46,7 @@ def transition(wf, type_, current, target, blocked_from=None):
         if target != blocked_from:
             raise RuleError(f"Unblock chỉ được về trạng thái trước khi block ('{blocked_from}')")
         return ["no_open_blockers"]
-    for tr in _type(wf, type_)["transitions"]:
+    for tr in type_def(wf, type_)["transitions"]:
         if current in _as_list(tr["from"]) and tr["to"] == target:
             return list(tr.get("guards", []))
     raise RuleError(f"{type_}: không được chuyển '{current}' → '{target}'")

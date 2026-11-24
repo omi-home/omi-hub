@@ -1,13 +1,8 @@
-import sys
 import unittest
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-from omi_hub.config import load_workflow  # noqa: E402
-from omi_hub.domain import lifecycle  # noqa: E402
-from omi_hub.domain.errors import RuleError  # noqa: E402
-
-WF = load_workflow()
+from support import WF
+from omi_hub.domain import lifecycle
+from omi_hub.domain.errors import RuleError
 
 
 class TestWorkflowFile(unittest.TestCase):
