@@ -7,12 +7,14 @@ from unittest import mock
 from support import WF
 from test_application_items import FakeGh
 from omi_hub.application import items, pipeline
+from omi_hub.domain.errors import RuleError
 
 
 class PipelineGh(FakeGh):
     def __init__(self):
         super().__init__()
         self.files, self.developed, self.branches = [], [], {}
+        self.branch_prs, self.link_lag, self.created, self.pending = {}, 0, 0, {}
 
     def merge_pr(self, cfg, pr):
         for i in self.issues.values():
@@ -23,9 +25,23 @@ class PipelineGh(FakeGh):
     def pr_checks(self, cfg, pr):
         return None, ""  # sandbox giả: không có CI → qa chạy commands.test
 
+    def open_pr_for_branch(self, cfg, head):
+        return self.branch_prs.get(head)
+
+    def issue_snapshot(self, cfg, n):
+        if self.link_lag and n in self.pending:  # GitHub liên kết PR vào issue trễ vài lần đọc
+            self.link_lag -= 1
+            if not self.link_lag:
+                self.issues[n]["prs"].append(dict(self.pending.pop(n)))
+        return super().issue_snapshot(cfg, n)
+
     def create_pr(self, cfg, title, body, head):
         n = int(re.search(r"Closes #(\d+)", body).group(1))
-        self.issues[n]["prs"].append({"number": 50, "state": "OPEN", "merged": False})
+        self.created += 1
+        if self.link_lag:
+            self.pending = {n: {"number": 50, "state": "OPEN", "merged": False}}
+        else:
+            self.issues[n]["prs"].append({"number": 50, "state": "OPEN", "merged": False})
         self.pr_created = (title, body)
         return 50
 
@@ -94,6 +110,33 @@ class TestPipeline(unittest.TestCase):
         self.assertIn("Có chạm security", body)
         self.assertIn("+x = 1", (self.T / "review-3.md").read_text(encoding="utf-8"))
         self.assertFalse(any("omi:reviewed" in c for c in self.g.notes.get(3, [])))  # marker do review-done ghi
+
+    def test_ac63_1_submit_waits_for_pr_link(self):
+        self.g.add(2, "User Story", "In Progress")
+        self.g.add(3, "Task", "In Progress", parent=2)
+        self.g.link_lag = 3
+        with mock.patch.object(pipeline, "run_cmd", return_value=(0, "omi/3-x")),                 mock.patch.object(pipeline.time, "sleep") as sl:
+            pipeline.submit(self.cfg, WF, 3)
+        self.assertEqual((self.st(3), self.g.created), ("In Review", 1))
+        self.assertGreater(sl.call_count, 1)
+
+    def test_ac63_1_submit_rerun_no_duplicate_pr(self):
+        self.g.add(2, "User Story", "In Progress")
+        self.g.add(3, "Task", "In Progress", parent=2)
+        self.g.branch_prs["omi/3-x"] = 50  # PR đã tạo ở lần trước, issue chưa liên kết
+        self.g.link_lag, self.g.pending = 1, {3: {"number": 50, "state": "OPEN", "merged": False}}
+        with mock.patch.object(pipeline, "run_cmd", return_value=(0, "omi/3-x")),                 mock.patch.object(pipeline.time, "sleep"):
+            self.assertEqual(pipeline.submit(self.cfg, WF, 3)[0], 50)
+        self.assertEqual((self.st(3), self.g.created), ("In Review", 0))
+
+    def test_submit_gives_up_when_never_linked(self):
+        self.g.add(2, "User Story", "In Progress")
+        self.g.add(3, "Task", "In Progress", parent=2)
+        self.g.link_lag = 99
+        with mock.patch.object(pipeline, "run_cmd", return_value=(0, "omi/3-x")),                 mock.patch.object(pipeline.time, "sleep"):
+            with self.assertRaisesRegex(RuleError, "chạy lại `submit 3`"):
+                pipeline.submit(self.cfg, WF, 3)
+        self.assertEqual(self.st(3), "In Progress")
 
     def test_submit_after_rework_skips_review(self):
         self.g.add(2, "User Story", "In Progress")
