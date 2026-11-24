@@ -39,7 +39,7 @@ def _check_sections(spec, body):
             continue
         if s.get("checklist") and not re.search(r"^\s*- \[[ xX]\] \S", v, re.M):
             errs.append(f"Mục '{h}' phải là checklist '- [ ] ...'")
-        if s.get("options") and v not in s["options"]:
+        if s.get("options") and v.splitlines()[0].strip() not in s["options"]:  # dòng đầu là lựa chọn; sau đó có thể là chữ ký/ghi chú
             errs.append(f"Mục '{h}' phải là một trong: {', '.join(s['options'])}")
         if s.get("pattern") and not re.search(s["pattern"], v, re.M):
             errs.append(f"Mục '{h}' sai định dạng ({s.get('hint') or s['pattern']})")

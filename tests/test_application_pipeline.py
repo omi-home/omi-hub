@@ -1,0 +1,136 @@
+import re
+import tempfile
+import unittest
+from pathlib import Path
+from unittest import mock
+
+from support import WF
+from test_application_items import FakeGh
+from omi_hub.application import items, pipeline
+
+
+class PipelineGh(FakeGh):
+    def __init__(self):
+        super().__init__()
+        self.files, self.developed, self.branches = [], [], {}
+
+    def merge_pr(self, cfg, pr):
+        for i in self.issues.values():
+            for p in i["prs"]:
+                if p["number"] == pr:
+                    p.update(state="MERGED", merged=True)
+
+    def pr_checks(self, cfg, pr):
+        return None, ""  # sandbox giả: không có CI → qa chạy commands.test
+
+    def create_pr(self, cfg, title, body, head):
+        n = int(re.search(r"Closes #(\d+)", body).group(1))
+        self.issues[n]["prs"].append({"number": 50, "state": "OPEN", "merged": False})
+        self.pr_created = (title, body)
+        return 50
+
+    def pr_files(self, cfg, pr):
+        return self.files
+
+    def pr_diff(self, cfg, pr):
+        return "+x = 1"
+
+    def issue_branches(self, cfg, n):
+        return self.branches.get(n, [])
+
+    def develop(self, cfg, n, cwd=None):
+        self.developed.append(n)
+
+
+PCFG = {"commands": {"test": "T", "accept": "A {n}"}, "review_max_diff_lines": 100}
+OPEN_PR = {"number": 50, "state": "OPEN", "merged": False}
+AC1 = "### Acceptance criteria\n- [ ] đăng nhập được"
+
+
+class TestPipeline(unittest.TestCase):
+    def setUp(self):
+        self.g = PipelineGh()
+        self.tmp = tempfile.TemporaryDirectory()
+        self.cfg = dict(PCFG, _root=self.tmp.name)
+        self.T = Path(self.tmp.name) / ".omi" / "tmp"
+        self.patches = [mock.patch.object(items, "gh", self.g), mock.patch.object(pipeline, "gh", self.g)]
+        for p in self.patches:
+            p.start()
+
+    def tearDown(self):
+        for p in self.patches:
+            p.stop()
+        self.tmp.cleanup()
+
+    def st(self, n):
+        return self.g.issues[n]["status"]
+
+    def test_start_moves_draft_to_in_progress_and_checks_out(self):
+        self.g.add(2, "User Story", "Approved")
+        self.g.add(3, "Task", "Draft", parent=2)
+        self.assertEqual(pipeline.start(self.cfg, WF, 3), 3)
+        self.assertEqual(self.st(3), "In Progress")
+        self.assertEqual(self.g.developed, [3])
+        self.assertEqual((self.T / "current").read_text(encoding="utf-8"), "3")
+
+    def test_submit_first_time_requests_review_with_security(self):
+        self.g.add(2, "User Story", "In Progress", body=AC1)
+        self.g.add(3, "Task", "In Progress", parent=2)
+        def fake_run(cmd, cwd=None):
+            cmd = " ".join(cmd) if isinstance(cmd, list) else cmd
+            if cmd.startswith("git diff"):
+                return 0, "src/auth/login.py\n"
+            if cmd.startswith("git log"):
+                return 0, "#3: thêm login\n"
+            return 0, "omi/3-login"
+
+        with mock.patch.object(pipeline, "run_cmd", side_effect=fake_run):
+            pr, reviewers = pipeline.submit(self.cfg, WF, 3)
+        self.assertEqual((pr, reviewers, self.st(3)), (50, ["code", "security"], "In Review"))
+        title, body = self.g.pr_created
+        self.assertEqual(title, "#3 (#3)")
+        self.assertIn("Closes #3", body)
+        self.assertIn("- #3: thêm login", body)
+        self.assertIn("Có chạm security", body)
+        self.assertIn("+x = 1", (self.T / "review-3.md").read_text(encoding="utf-8"))
+        self.assertFalse(any("omi:reviewed" in c for c in self.g.notes.get(3, [])))  # marker do review-done ghi
+
+    def test_submit_after_rework_skips_review(self):
+        self.g.add(2, "User Story", "In Progress")
+        self.g.add(3, "Task", "In Progress", parent=2, prs=[dict(OPEN_PR)])
+        self.g.notes[3] = ["<!-- omi:reviewed -->"]
+        with mock.patch.object(pipeline, "run_cmd", return_value=(0, "")):
+            self.assertEqual(pipeline.submit(self.cfg, WF, 3), (50, []))
+        self.assertEqual(self.st(3), "In Review")
+
+    def test_qa_pass_merges_done_and_accepts_parent(self):
+        self.g.add(1, "Epic", "In Progress")
+        self.g.add(2, "User Story", "In Progress", parent=1, body=AC1)
+        self.g.add(3, "Task", "In Review", parent=2, prs=[dict(OPEN_PR)])
+        with mock.patch.object(pipeline, "run_cmd", return_value=(0, "test_ac2_1 ... ok")):
+            self.assertEqual(pipeline.qa(self.cfg, WF, 3), 0)
+        self.assertEqual((self.st(3), self.st(2), self.st(1)), ("Done", "Done", "Done"))
+        self.assertFalse((self.T / "current").exists())
+
+    def test_qa_fail_reworks_and_writes_log(self):
+        self.g.add(2, "User Story", "In Progress")
+        self.g.add(3, "Task", "In Review", parent=2, prs=[dict(OPEN_PR)])
+        with mock.patch.object(pipeline, "run_cmd", return_value=(1, "AssertionError: boom")):
+            self.assertEqual(pipeline.qa(self.cfg, WF, 3), 1)
+        self.assertEqual((self.st(3), self.g.issues[3]["rework_count"]), ("In Progress", 1))
+        self.assertIn("boom", (self.T / "qa-3.log").read_text(encoding="utf-8"))
+
+    def test_accept_manual_unticked_stays_in_qa(self):
+        self.g.add(2, "User Story", "In QA", body="### Acceptance criteria\n- [ ] [manual] UI")
+        self.assertEqual(pipeline.accept(self.cfg, WF, 2), 1)
+        self.assertEqual((self.st(2), self.g.issues[2]["rework_count"]), ("In QA", 0))
+
+    def test_accept_auto_fail_reworks(self):
+        self.g.add(2, "User Story", "In QA", body=AC1)
+        with mock.patch.object(pipeline, "run_cmd", return_value=(0, "nothing")):
+            self.assertEqual(pipeline.accept(self.cfg, WF, 2), 1)
+        self.assertEqual(self.st(2), "In Progress")
+
+
+if __name__ == "__main__":
+    unittest.main()

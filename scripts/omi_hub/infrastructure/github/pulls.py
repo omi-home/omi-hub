@@ -1,0 +1,42 @@
+"""Branch phát triển của issue và Pull Request."""
+import json
+
+from . import client
+
+
+def issue_branches(cfg, n):
+    out = client.run(["issue", "develop", "--list", str(n), "-R", client.repo_full(cfg)])
+    return [line.split()[0] for line in out.splitlines() if line.strip()]
+
+
+def develop(cfg, n, cwd=None):
+    client.run(["issue", "develop", str(n), "-R", client.repo_full(cfg), "--checkout"], cwd=cwd)
+
+
+def create_pr(cfg, title, body, head):
+    url = client.run(["pr", "create", "-R", client.repo_full(cfg), "--head", head, "--title", title,
+               "--body-file", "-"], input=body).strip().splitlines()[-1]
+    return int(url.rstrip("/").split("/")[-1])
+
+
+def pr_view(cfg, pr):
+    d = json.loads(client.run(["pr", "view", str(pr), "-R", client.repo_full(cfg), "--json", "title,body"]))
+    return d["title"], d["body"]
+
+
+def pr_diff(cfg, pr):
+    return client.run(["pr", "diff", str(pr), "-R", client.repo_full(cfg)])
+
+
+def pr_checks(cfg, pr):
+    """(True|False, output) khi PR có CI; (None, "") khi không có check nào."""
+    try:
+        return True, client.run(["pr", "checks", str(pr), "-R", client.repo_full(cfg), "--watch", "--fail-fast"])
+    except client.GhError as e:
+        if "no checks reported" in str(e).lower():
+            return None, ""
+        return False, str(e)
+
+
+def merge_pr(cfg, pr):
+    client.run(["pr", "merge", str(pr), "-R", client.repo_full(cfg), "--squash", "--delete-branch"])
