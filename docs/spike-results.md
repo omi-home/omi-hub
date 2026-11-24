@@ -18,7 +18,7 @@ Sandbox: `omi-home/omi-sandbox` (private, giữ lại cho e2e), Project thử `o
 | 12 | CLAUDE_PLUGIN_ROOT trong hook | ✓ `ROOT=<thư mục plugin>` (đường dẫn dạng `C:/...` dấu `/`) | Giữ nguyên |
 | 13 | agent memory: project trong plugin | ✓ nhưng thư mục là `.claude/agent-memory/<plugin>-<agent>/` (ví dụ `probe-probe/`), agent gọi bằng `probe:probe` | Spec D9 sửa đường dẫn (`omi-hub-omi-reviewer/`); skill gọi reviewer bằng `omi-hub:omi-reviewer` |
 | 14 | Issue Type tên dài có dấu cách/gạch ngang tạo + gán + filter `type:"..."` | ✓ "Spike Non-Functional Requirement": tạo, gán qua REST, `gh issue list --search 'type:"..."'` trả đúng issue | Giữ nguyên |
-| 15 | Fine-grained PAT (`OMI_PROJECT_TOKEN`) đọc/ghi Project v2 của org | ☐ Cần người dùng tạo PAT | Chờ người dùng |
+| 15 | Fine-grained PAT (`OMI_PROJECT_TOKEN`) đọc/ghi Project v2 của org | ✓ Trong Action: `field-list`, `item-add`, `item-edit` Status=Ready OK. Chỉ có org Projects RW + repo Issues RW thì **lỗi** `Resource not accessible by personal access token (...pullRequests...)` (field-list/snapshot đọc PR liên kết) | Quyền PAT: org Projects RW; repo Issues RW, **Pull requests R** (+ Contents R cho repo omi-hub). Đã sửa checklist `init` trong plan |
 
 ## Phát hiện thêm
 

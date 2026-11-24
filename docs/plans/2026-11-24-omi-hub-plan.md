@@ -2688,7 +2688,7 @@ def cmd_init(wf, milestone=None, from_template=None, template_only=False, hub_re
         gh.ensure_milestone(cfg, milestone)
     print(f"✅ Project #{number} đã gắn với {owner}/{repo}.\n"
           "Việc còn lại cho người:\n"
-          "  1. Tạo secret OMI_PROJECT_TOKEN (fine-grained PAT: org Projects RW; repo Issues RW;"
+          "  1. Tạo secret OMI_PROJECT_TOKEN (fine-grained PAT: org Projects RW; repo Issues RW, Pull requests R;"
           f" Contents R cho {hub_repo}).\n"
           "  2. Commit .github/ trong repo (AGENTS.md và .omi/ ở workspace, không commit).\n"
           + ("" if from_template else "  3. Tạo views theo docs/views.md (hoặc dùng --from-template lần sau).\n"))
