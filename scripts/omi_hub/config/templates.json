@@ -1,0 +1,63 @@
+{
+  "Epic": {
+    "title": {"pattern": "^\\S.{4,80}$", "example": "Quản lý đơn hàng", "hint": "Danh từ chỉ capability, 5–80 ký tự"},
+    "sections": [
+      {"heading": "Mục tiêu", "required": true, "hint": "Capability mang lại giá trị gì, cho ai"},
+      {"heading": "Phạm vi", "required": true, "hint": "Gạch đầu dòng những gì thuộc Epic"},
+      {"heading": "Ngoài phạm vi", "required": false, "hint": "Những gì không làm"},
+      {"heading": "Chỉ số thành công", "required": false, "hint": "Đo thế nào là thành công"}
+    ]
+  },
+  "User Story": {
+    "title": {"pattern": "^.+ có thể .+$", "example": "Khách hàng có thể theo dõi trạng thái đơn hàng", "hint": "<Vai trò> có thể <hành động>"},
+    "sections": [
+      {"heading": "Story", "required": true, "default": "Là <vai trò>, tôi muốn <hành động> để <giá trị>.", "pattern": "^Là .+, tôi muốn .+ để .+"},
+      {"heading": "Acceptance criteria", "required": true, "default": "- [ ] ", "checklist": true, "hint": "Mỗi dòng kiểm chứng được bằng test; không tự động được thì ghi [manual]"},
+      {"heading": "Ghi chú", "required": false}
+    ]
+  },
+  "Functional Requirement": {
+    "title": {"pattern": "^Hệ thống (phải|cần) .+$", "example": "Hệ thống phải gửi email xác nhận khi đơn hàng được tạo", "hint": "Hệ thống phải <hành vi>", "prefill": "Hệ thống phải "},
+    "sections": [
+      {"heading": "Mô tả", "required": true, "hint": "Đầu vào → xử lý → đầu ra"},
+      {"heading": "Acceptance criteria", "required": true, "default": "- [ ] ", "checklist": true, "hint": "Mỗi dòng kiểm chứng được bằng test; không tự động được thì ghi [manual]"},
+      {"heading": "Ràng buộc", "required": false}
+    ]
+  },
+  "Non-Functional Requirement": {
+    "title": {"pattern": "^(Performance|Security|Reliability|Usability|Maintainability|Compliance): .+$", "example": "Performance: p95 API đặt hàng < 300ms ở 100 RPS", "hint": "<Nhóm>: <chỉ số> <ngưỡng>"},
+    "sections": [
+      {"heading": "Nhóm", "required": true, "options": ["Performance", "Security", "Reliability", "Usability", "Maintainability", "Compliance"]},
+      {"heading": "Chỉ số và ngưỡng", "required": true, "hint": "Ví dụ: p95 < 300ms ở 100 RPS"},
+      {"heading": "Cách đo", "required": true, "hint": "Công cụ/lệnh đo và môi trường"},
+      {"heading": "Acceptance criteria", "required": true, "default": "- [ ] ", "checklist": true, "hint": "Mỗi dòng kiểm chứng được bằng test; không tự động được thì ghi [manual]"}
+    ]
+  },
+  "Change Request": {
+    "title": {"pattern": "^Thay đổi .+: .+$", "example": "Thay đổi thanh toán: hỗ trợ trả góp", "hint": "Thay đổi <đối tượng>: <tóm tắt>", "prefill": "Thay đổi "},
+    "sections": [
+      {"heading": "Lý do thay đổi", "required": true},
+      {"heading": "Nội dung thay đổi", "required": true, "hint": "Trước → sau"},
+      {"heading": "Affects", "required": true, "hint": "Item bị ảnh hưởng, ví dụ: #12 #15", "pattern": "#\\d+"},
+      {"heading": "Ảnh hưởng dự kiến", "required": false}
+    ]
+  },
+  "Task": {
+    "title": {"pattern": "^\\S.{4,100}$", "example": "Thêm API POST /orders", "hint": "<Động từ> <đối tượng>, 5–100 ký tự"},
+    "sections": [
+      {"heading": "Việc cần làm", "required": true},
+      {"heading": "Definition of done", "required": true, "default": "- [ ] Test pass\n- [ ] PR merged", "checklist": true, "placeholder": false},
+      {"heading": "Ghi chú kỹ thuật", "required": false}
+    ]
+  },
+  "Bug": {
+    "title": {"pattern": "^.+: .+$", "example": "Giỏ hàng: tổng tiền sai khi áp mã giảm giá", "hint": "<Thành phần>: <triệu chứng>"},
+    "sections": [
+      {"heading": "Affects", "required": true, "hint": "Item bị ảnh hưởng, ví dụ: #42", "pattern": "#\\d+"},
+      {"heading": "Môi trường", "required": false, "hint": "Phiên bản, OS, trình duyệt"},
+      {"heading": "Các bước tái hiện", "required": true, "default": "1. "},
+      {"heading": "Kết quả mong đợi", "required": true},
+      {"heading": "Kết quả thực tế", "required": true}
+    ]
+  }
+}
