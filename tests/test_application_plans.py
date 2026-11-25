@@ -43,9 +43,13 @@ class TestApply(unittest.TestCase):
         self.assertEqual(keys, {"E001": 101, "E001.S001": 102, "E001.S001.T001": 103})
 
     def test_idempotent_and_draft_without_approve(self):
-        calls, keys = self.run_apply({"E001": 7}, approve=False)
+        calls, keys = self.run_apply({"E001": {"number": 7, "title": "[Epic] Quản lý đơn hàng"}}, approve=False)
         self.assertEqual(calls, [("User Story", 7, None, "E001.S001", None), ("Task", 101, None, "E001.S001.T001", None)])
         self.assertEqual(keys["E001"], 7)
+
+    def test_key_of_other_issue_rejected_before_creating(self):
+        with self.assertRaisesRegex(RuleError, "key E001 đã là #1"):
+            self.run_apply({"E001": {"number": 1, "title": "[Epic] Plan cũ"}}, approve=True)
 
     def test_invalid_plan_rejected(self):
         bad = {"items": [{"key": "T001", "type": "Task", "title": "x"}]}

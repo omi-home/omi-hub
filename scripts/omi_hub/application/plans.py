@@ -6,6 +6,7 @@ from omi_hub.application import items
 from omi_hub.config import load_templates
 from omi_hub.domain.errors import RuleError
 from omi_hub.domain.planning import validate_plan
+from omi_hub.domain.templates import with_prefix
 from omi_hub.infrastructure.github import gateway as gh
 
 APPROVE_STATUS = {"Epic": "Approved", "User Story": "Approved", "Functional Requirement": "Approved", "Non-Functional Requirement": "Approved",
@@ -14,10 +15,22 @@ APPROVE_STATUS = {"Epic": "Approved", "User Story": "Approved", "Functional Requ
 
 def apply(cfg, wf, plan_path, approve=False):
     plan = json.loads(Path(plan_path).read_text(encoding="utf-8"))
-    errs = validate_plan(wf, plan, load_templates())
+    tpl = load_templates()
+    errs = validate_plan(wf, plan, tpl)
     if errs:
         raise RuleError(errs)
-    keys = dict(gh.existing_keys(cfg))
+    found = gh.existing_keys(cfg)
+
+    def clashes(node):
+        old = found.get(node["key"])
+        if old and old["title"] != with_prefix(tpl, node["type"], node["title"]):
+            yield f"key {node['key']} đã là #{old['number']} '{old['title']}' — đổi key hoặc sửa title cho khớp"
+        for c in node.get("children", []):
+            yield from clashes(c)
+    errs = [e for n in plan["items"] for e in clashes(n)]
+    if errs:  # trước khi tạo gì: key trùng plan khác sẽ gắn nhầm cả cây con
+        raise RuleError(errs)
+    keys = {k: v["number"] for k, v in found.items()}
     for m in {n.get("milestone") or plan.get("milestone") for n in plan["items"] if "parent" not in n} - {None}:
         gh.ensure_milestone(cfg, m)  # node con kế thừa milestone parent, chỉ node gốc cần
 

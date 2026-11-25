@@ -111,12 +111,12 @@ def repo_issues(cfg):
 
 def existing_keys(cfg):
     out = json.loads(client.run(["issue", "list", "-R", client.repo_full(cfg), "--state", "all", "--limit", "1000",
-                          "--json", "number,body"]))
+                          "--json", "number,title,body"]))
     keys = {}
     for i in out:
         m = re.search(r"<!-- omi:key=(\S+) -->", i["body"] or "")
         if m:
-            keys[m.group(1)] = i["number"]
+            keys[m.group(1)] = {"number": i["number"], "title": i["title"]}
     return keys
 
 

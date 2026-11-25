@@ -10,7 +10,7 @@ description: Phân rã PRD thành plan JSON omi (Epic → Story/Functional Requi
    - Epic: capability lớn. Story: giá trị cho một vai trò. Functional Requirement: hành vi hệ thống. Non-Functional Requirement: chất lượng đo được (có ngưỡng). Task: ≤ 1 ngày, luôn dưới Story/Functional Requirement/Non-Functional Requirement. Không có Change Request.
    - Story/Functional Requirement/Non-Functional Requirement có `### Acceptance criteria` dạng `- [ ]`, mỗi dòng kiểm chứng được bằng test; không tự động hóa được thì ghi `[manual]`.
    - Title và body mỗi node theo template của loại (`OMI_CLI template <type>`, mục `### ...` đúng tên).
-   - Key phân cấp ổn định (`E001.S002.T003`). Gắn vào issue có sẵn: `"parent": <số>` ở node gốc. Milestone chỉ ở `plan.milestone` hoặc node gốc không có `parent` (con kế thừa); mỗi milestone khác nhau là một Epic gốc riêng; apply tự tạo milestone chưa có.
+   - Key phân cấp ổn định (`E001.S002.T003`). Key duy nhất trong cả repo: plan mới dùng số Epic chưa có (apply báo lỗi nếu key đã thuộc issue khác title). Gắn vào issue có sẵn: `"parent": <số>` ở node gốc. Milestone chỉ ở `plan.milestone` hoặc node gốc không có `parent` (con kế thừa); mỗi milestone khác nhau là một Epic gốc riêng; apply tự tạo milestone chưa có.
 
 ```json
 {"milestone": "v1.0", "items": [
