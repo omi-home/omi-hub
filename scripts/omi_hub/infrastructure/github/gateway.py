@@ -6,7 +6,7 @@ from .client import GhError
 from .issues import (AUDIT_TITLE, add_blocked_by, add_sub_issue, assign_self, blocker_numbers, close, comment, comments,
                      create_issue, existing_keys, issue_db_id, issue_snapshot, open_dependents, repo_issues,
                      upsert_audit_issue)
-from .milestones import ensure_milestone, set_milestone
+from .milestones import ensure_milestone, milestone_open_issues, set_milestone
 from .pulls import (create_pr, develop, issue_branches, merge_pr, open_pr_for_branch, pr_checks, pr_diff,
                     pr_view)
 from .release import (add_team_member, branch_exists, compare_commits, ensure_branch, ensure_codeowners,
@@ -18,7 +18,7 @@ __all__ = ["remote_json", "get_variable", "secret_names", "has_ruleset", "copy_p
            "link_project", "load_fields", "project_node_id", "current_repo", "default_branch", "ensure_label", "set_variable", "GhError", "AUDIT_TITLE",
            "add_blocked_by", "add_sub_issue", "assign_self", "blocker_numbers", "close", "comment", "comments", "create_issue",
            "existing_keys", "issue_db_id", "issue_snapshot", "open_dependents", "repo_issues", "upsert_audit_issue",
-           "ensure_milestone", "set_milestone", "add_to_project", "clear_field", "find_item", "project_items",
+           "ensure_milestone", "milestone_open_issues", "set_milestone", "add_to_project", "clear_field", "find_item", "project_items",
            "set_field", "create_pr", "develop", "issue_branches", "merge_pr", "open_pr_for_branch", "pr_checks", "pr_diff", "pr_view",
            "branch_exists", "compare_commits", "ensure_branch", "ensure_codeowners", "ensure_ruleset", "pr_reviews",
            "set_default_branch", "add_team_member", "ensure_team", "org_owners", "remove_team_member",

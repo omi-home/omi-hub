@@ -35,7 +35,13 @@ def apply_status(cfg, wf, snap, target, reason=None):
     print(f"#{n} {snap['type']}: {snap['status']} → {target}")
     snap["status"] = target
     if is_terminal(wf, target):
-        release_dependents(cfg, wf, n)
+        after_terminal(cfg, wf, snap)
+
+
+def after_terminal(cfg, wf, snap):
+    release_dependents(cfg, wf, snap["number"])
+    if snap.get("milestone") and gh.milestone_open_issues(cfg, snap["milestone"]) == 0:
+        print(f"MILESTONE {snap['milestone']} sẵn sàng release")  # spec §4.6: báo, không tự đóng milestone
 
 
 def release_dependents(cfg, wf, n):
@@ -99,7 +105,7 @@ def move(cfg, wf, n, target, reason=None):
         # Built-in workflow của Project (Item closed / PR merged) có thể đã set Done trước: chỉ chạy rollup.
         print(f"#{n} đã ở '{target}', chỉ chạy rollup")
         if is_terminal(wf, target):
-            release_dependents(cfg, wf, n)
+            after_terminal(cfg, wf, snap)
         rollup_up(cfg, wf, snap, target)
         return target
     if (target == "Ready" and snap["open_blockers"] and snap["status"] != WAITING
