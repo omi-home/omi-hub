@@ -34,18 +34,40 @@ def write_templates(hub_repo, repo=Path("."), workspace=Path(".")):
 
 
 DEVELOP = "develop"
+MAIN_CANDIDATES = ("main", "master")
+
+
+def main_branch(cfg, old):
+    if old.get("main_branch"):
+        return old["main_branch"]
+    current = gh.default_branch(cfg["owner"], cfg["repo"])
+    if current != DEVELOP:
+        return current
+    found = next((b for b in MAIN_CANDIDATES if gh.branch_exists(cfg, b)), None)  # mất config, default đã là develop
+    if not found:
+        raise RuleError(f"Không xác định được nhánh chính (không có {'/'.join(MAIN_CANDIDATES)}); "
+                        "ghi \"main_branch\" vào .omi/project.json rồi chạy lại init")
+    return found
 
 
 def release_flow(cfg, po, old):
     """develop = default branch (PR task, Closes #n giữ nguyên); nhánh chính chỉ nhận PR release có PO duyệt.
-    Trả lỗi ruleset (None nếu có ruleset)."""
-    current = gh.default_branch(cfg["owner"], cfg["repo"])
-    main = old.get("main_branch") or (current if current != DEVELOP else "main")
-    gh.ensure_codeowners(cfg, main, po)  # trước ruleset: sau đó nhánh chính không nhận push thẳng
+    Trả danh sách cảnh báo."""
+    main, warns = main_branch(cfg, old), []
+    try:
+        gh.ensure_codeowners(cfg, main, po)  # trước ruleset: sau đó nhánh chính không nhận push thẳng
+    except gh.GhError:  # đổi PO khi ruleset đã có: đi qua develop, PO cũ duyệt release kế tiếp
+        gh.ensure_branch(cfg, DEVELOP, main)
+        gh.ensure_codeowners(cfg, DEVELOP, po)
+        warns.append(f"CODEOWNERS @{po} ghi lên {DEVELOP}; lên {main} ở release kế tiếp (PO cũ approve)")
     gh.ensure_branch(cfg, DEVELOP, main)
     gh.set_default_branch(cfg, DEVELOP)
     cfg.update(default_branch=DEVELOP, main_branch=main, po=po)
-    return gh.ensure_ruleset(cfg, main)
+    err = gh.ensure_ruleset(cfg, main)
+    if err:
+        warns.append(f"Không tạo được ruleset cho {main} ({err}). Repo private gói Free không có ruleset:"
+                     " chỉ `release --merge` kiểm PO approve, merge tay trên web vẫn lọt.")
+    return warns
 
 
 def init(wf, milestone=None, from_template=None, template_only=False, hub_repo="omi-home/omi-hub",
@@ -72,7 +94,7 @@ def init(wf, milestone=None, from_template=None, template_only=False, hub_repo="
            "commands": {**old.get("commands", {}), **{k: v for k, v in new_cmds.items() if v}},
            "security_paths": old.get("security_paths", DEFAULT_SECURITY),
            "review_max_diff_lines": old.get("review_max_diff_lines", 1500)}
-    rules_err = release_flow(cfg, po, old)
+    warns = release_flow(cfg, po, old)
     CONFIG.parent.mkdir(exist_ok=True)
     CONFIG.write_text(json.dumps(cfg, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     write_templates(hub_repo, Path(repo_dir_), Path("."))
@@ -80,9 +102,8 @@ def init(wf, milestone=None, from_template=None, template_only=False, hub_repo="
     gh.ensure_label(cfg, "security")  # label bật security review (spec 5.6)
     if milestone:
         gh.ensure_milestone(cfg, milestone)
-    if rules_err:
-        print(f"⚠️ Không tạo được ruleset cho {cfg['main_branch']} ({rules_err}). Repo private gói Free không có"
-              " ruleset: chỉ `release --merge` kiểm PO approve, merge tay trên web vẫn lọt.")
+    for w in warns:
+        print(f"⚠️ {w}")
     print(f"✅ Project #{number} đã gắn với {owner}/{repo}.\n"
           "Việc còn lại cho người:\n"
           "  1. Tạo secret OMI_PROJECT_TOKEN (fine-grained PAT: org Projects RW; repo Issues RW, Pull requests R;"

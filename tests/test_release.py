@@ -2,7 +2,7 @@ import unittest
 from unittest import mock
 
 import support  # noqa: F401  (sys.path)
-from omi_hub.application import release, setup
+from omi_hub.application import pipeline, release, setup
 from omi_hub.domain.errors import RuleError
 from omi_hub.domain.release import po_approved
 
@@ -15,6 +15,15 @@ class FakeGh:
     def __init__(self, default="main", ruleset_err=None):
         self.calls, self.default, self.ruleset_err = [], default, ruleset_err
         self.open_pr, self.commits, self.reviews, self.auto_fails = None, ["feat: a (#1)"], [], False
+        self.branches, self.locked = {"main", "develop"}, set()
+
+    def branch_exists(self, cfg, name):
+        return name in self.branches
+
+    def ensure_codeowners(self, cfg, branch, po):
+        if branch in self.locked:  # ruleset chặn push thẳng
+            raise self.GhError("Repository rule violations found")
+        self.calls.append(("ensure_codeowners", (branch, po), {}))
 
     def default_branch(self, owner, repo):
         return self.default
@@ -54,8 +63,8 @@ class TestReleaseFlow(unittest.TestCase):
 
     def test_ac70_1_init_sets_up_develop_codeowners_ruleset(self):
         g = FakeGh(default="master")
-        _, err = self.run_flow(g)
-        self.assertIsNone(err)
+        _, warns = self.run_flow(g)
+        self.assertEqual(warns, [])
         self.assertEqual([c[0] for c in g.calls],
                          ["ensure_codeowners", "ensure_branch", "set_default_branch", "ensure_ruleset"])
         self.assertEqual(g.calls[0][1], ("master", "boss"))  # CODEOWNERS lên nhánh chính, trước ruleset
@@ -63,8 +72,17 @@ class TestReleaseFlow(unittest.TestCase):
         self.assertEqual(g.calls[3][1], ("master",))
 
     def test_ac70_1_ruleset_unsupported_warns_not_fails(self):
-        _, err = self.run_flow(FakeGh(ruleset_err="Upgrade to GitHub Pro"))
-        self.assertEqual(err, "Upgrade to GitHub Pro")
+        _, warns = self.run_flow(FakeGh(ruleset_err="Upgrade to GitHub Pro"))
+        self.assertEqual(len(warns), 1)
+        self.assertIn("Upgrade to GitHub Pro", warns[0])
+
+    def test_ac70_1_po_change_after_ruleset_goes_via_develop(self):
+        g = FakeGh(default="develop")
+        g.locked = {"main"}
+        cfg, warns = self.run_flow(g, {"main_branch": "main"})
+        self.assertIn(("ensure_codeowners", ("develop", "boss"), {}), g.calls)
+        self.assertEqual(len(warns), 1)
+        self.assertEqual(cfg["po"], "boss")
 
     def test_ac70_2_config_targets_develop(self):
         cfg, _ = self.run_flow(FakeGh())
@@ -74,10 +92,32 @@ class TestReleaseFlow(unittest.TestCase):
         cfg, _ = self.run_flow(FakeGh(default="develop"), {"main_branch": "master"})
         self.assertEqual(cfg["main_branch"], "master")
 
+    def test_ac70_2_lost_config_finds_master(self):
+        g = FakeGh(default="develop")
+        g.branches = {"develop", "master"}
+        cfg, _ = self.run_flow(g)
+        self.assertEqual(cfg["main_branch"], "master")
+        g.branches = {"develop"}
+        with self.assertRaises(RuleError):
+            self.run_flow(g)
+
     def test_ac70_2_init_requires_po(self):
         with mock.patch.object(setup, "CONFIG", mock.Mock(exists=lambda: False)):
             with self.assertRaises(RuleError):
                 setup.init({}, po=None)
+
+
+class TestPrLint(unittest.TestCase):
+    def lint(self, head, cfg):
+        g = FakeGh()
+        g.pr_view = lambda c, pr: ("Release", "no template", head)
+        with mock.patch.object(pipeline, "gh", g):
+            return pipeline.pr_lint(cfg, 9)
+
+    def test_ac70_3_release_pr_skips_template(self):
+        self.assertEqual(self.lint("develop", CFG), 0)
+        self.assertEqual(self.lint("feature-x", CFG), 1)  # PR task vẫn bị kiểm
+        self.assertEqual(self.lint("develop", {"default_branch": "develop"}), 1)  # chưa bật release
 
 
 class TestRelease(unittest.TestCase):

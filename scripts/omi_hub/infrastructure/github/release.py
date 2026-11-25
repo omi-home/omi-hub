@@ -23,13 +23,18 @@ def ensure_codeowners(cfg, branch, po):
     client.rest("PUT", path, body)
 
 
+def branch_exists(cfg, name):
+    try:
+        client.rest("GET", f"{client.repo_path(cfg)}/branches/{name}")
+        return True
+    except client.GhError:
+        return False
+
+
 def ensure_branch(cfg, name, from_branch):
     rp = client.repo_path(cfg)
-    try:
-        client.rest("GET", f"{rp}/branches/{name}")
+    if branch_exists(cfg, name):
         return
-    except client.GhError:
-        pass
     sha = client.rest("GET", f"{rp}/git/ref/heads/{from_branch}")["object"]["sha"]
     client.rest("POST", f"{rp}/git/refs", {"ref": f"refs/heads/{name}", "sha": sha})
 
