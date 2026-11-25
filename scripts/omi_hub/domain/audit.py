@@ -1,6 +1,6 @@
 """Bất biến trên trạng thái hiện tại của Project (dùng cho audit)."""
 from .errors import RuleError
-from .lifecycle import BLOCKED, allowed_statuses, is_terminal
+from .lifecycle import BLOCKED, WAITING, allowed_statuses, is_terminal
 from .relations import check_parent
 
 
@@ -37,6 +37,10 @@ def check_invariants(wf, item, by_number):
         bad("Done nhưng còn con chưa kết thúc")
     if st == BLOCKED and not item["blocked_reason"] and item["open_blockers"] == 0:
         bad("Blocked nhưng không có Blocked Reason hay blocked-by")
+    if st == WAITING and not closed and item["open_blockers"] == 0:
+        bad("Waiting nhưng không còn blocked-by mở", ("status", "Ready"))
+    if st == "Ready" and item["open_blockers"] and WAITING in allowed_statuses(wf, t):
+        bad("Ready nhưng còn blocked-by mở", ("status", WAITING))  # blocked-by thêm tay trên GitHub
     if parent and parent["milestone"] and item["milestone"] != parent["milestone"]:
         bad(f"milestone '{item['milestone']}' khác parent '{parent['milestone']}'", ("milestone", parent["milestone"]))
     return out

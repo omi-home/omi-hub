@@ -2,7 +2,7 @@
 from omi_hub.config import load_templates
 from omi_hub.domain.errors import RuleError
 from omi_hub.domain.guards import evaluate_guards
-from omi_hub.domain.lifecycle import BLOCKED, allowed_statuses, is_terminal, transition
+from omi_hub.domain.lifecycle import BLOCKED, WAITING, allowed_statuses, is_terminal, transition
 from omi_hub.domain.relations import check_links, check_parent, rollup
 from omi_hub.domain.rework import rework as rework_status
 from omi_hub.domain.templates import check_template, with_prefix
@@ -34,6 +34,16 @@ def apply_status(cfg, wf, snap, target, reason=None):
         snap["state"] = "CLOSED"
     print(f"#{n} {snap['type']}: {snap['status']} → {target}")
     snap["status"] = target
+    if is_terminal(wf, target):
+        release_dependents(cfg, wf, n)
+
+
+def release_dependents(cfg, wf, n):
+    """n vừa kết thúc: issue Waiting mà hết blocker mở → Ready."""
+    for d in gh.open_dependents(cfg, n):
+        s = gh.issue_snapshot(cfg, d)
+        if s["item_id"] and s["status"] == WAITING and s["open_blockers"] == 0:
+            apply_status(cfg, wf, s, "Ready", f"Tự động: hết blocker (#{n} đã kết thúc)")
 
 
 def rollup_up(cfg, wf, snap, trigger):
@@ -88,8 +98,14 @@ def move(cfg, wf, n, target, reason=None):
     if snap["status"] == target:
         # Built-in workflow của Project (Item closed / PR merged) có thể đã set Done trước: chỉ chạy rollup.
         print(f"#{n} đã ở '{target}', chỉ chạy rollup")
+        if is_terminal(wf, target):
+            release_dependents(cfg, wf, n)
         rollup_up(cfg, wf, snap, target)
         return
+    if (target == "Ready" and snap["open_blockers"] and snap["status"] != WAITING
+            and WAITING in allowed_statuses(wf, snap["type"])):
+        print(f"#{n} còn {snap['open_blockers']} blocker mở → {WAITING} thay vì Ready")
+        target = WAITING
     blocked_from = (find_marker(gh.comments(cfg, n), "blocked-from")
                     if snap["status"] == BLOCKED else None)
     guards = transition(wf, snap["type"], snap["status"], target, blocked_from)

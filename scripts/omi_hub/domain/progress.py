@@ -50,6 +50,8 @@ def resume_step(status, dirty, ahead, reviewed, pack_exists):
         return "next", "Task đã kết thúc → `start` lấy task tiếp."
     if status == "Blocked":
         return "blocked", "Task đang Blocked → báo người dùng lý do, chờ `unblock`."
+    if status == "Waiting":
+        return "next", "Task đang chờ issue blocked-by → `start` lấy task khác."
     if status in ("Draft", "Triage", "Approved", "Ready"):
         return "start", "Chưa bắt đầu → `start`."
     if status == "In Progress":

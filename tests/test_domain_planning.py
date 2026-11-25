@@ -61,6 +61,22 @@ class TestValidatePlan(unittest.TestCase):
         p = self.plan([{"key": "T001", "type": "Task", "title": "T", "parent": 42}])
         self.assertEqual(planning.validate_plan(WF, p), [])
 
+    def test_blocked_by_format(self):
+        p = self.plan([{"key": "T001", "type": "Task", "title": "T", "parent": 42, "blocked_by": ["T001", 5, {"x": 1}]}])
+        self.assertEqual(len([e for e in planning.validate_plan(WF, p) if "blocked_by" in e]), 2)
+
+    def test_blocked_by_task_only_and_no_cycle(self):
+        t = lambda k, *b: {"key": k, "type": "Task", "title": k, "blocked_by": list(b)}
+        p = self.plan([{"key": "E001", "type": "Epic", "title": "E", "children": [
+            {"key": "E001.S001", "type": "User Story", "title": "S", "body": AC, "blocked_by": [3], "children": [
+                t("E001.S001.T001", "E001.S001.T003"), t("E001.S001.T002", "E001.S001.T001"),
+                t("E001.S001.T003", "E001.S001.T002"), t("E001.S001.T004", "E001.S001.T001", "E009.T001")]}]}])
+        errs = planning.validate_plan(WF, p)
+        self.assertTrue(any("E001.S001: blocked_by chỉ đặt ở Task" in e for e in errs))
+        self.assertEqual([e for e in errs if "vòng lặp" in e],
+                         ["blocked_by vòng lặp: E001.S001.T001 → E001.S001.T003 → E001.S001.T002 → E001.S001.T001"])
+        self.assertEqual(len(errs), 2)
+
     def test_milestone_only_on_root(self):
         p = self.plan([{"key": "E001", "type": "Epic", "title": "E", "milestone": "M0", "children": [
             {"key": "E001.S001", "type": "User Story", "title": "S", "body": AC, "milestone": "M1"}]},

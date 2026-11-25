@@ -160,7 +160,7 @@ Nguồn: `scripts/omi_hub/config/pr_template.json`.
 
 ### 4.1 Tập Status chung
 
-`Draft` · `Triage` · `Approved` · `Ready` · `In Progress` · `In Review` · `In QA` · `Blocked` · `Done` · `Cancelled`
+`Draft` · `Triage` · `Approved` · `Waiting` · `Ready` · `In Progress` · `In Review` · `In QA` · `Blocked` · `Done` · `Cancelled`
 
 Trạng thái kết thúc: `Done` (issue đóng *completed*), `Cancelled` (issue đóng *not planned*). Mọi trạng thái khác: issue mở.
 
@@ -171,8 +171,8 @@ Trạng thái kết thúc: `Done` (issue đóng *completed*), `Cancelled` (issue
 | Epic | Draft | Draft, Approved, In Progress, Blocked, Done, Cancelled |
 | User Story / Functional Requirement / Non-Functional Requirement | Draft | Draft, Approved, In Progress, In QA, Blocked, Done, Cancelled |
 | Change Request | Triage | Triage, Approved, In Progress, Blocked, Done, Cancelled |
-| Task | Draft | Draft, Ready, In Progress, In Review, In QA, Blocked, Done, Cancelled |
-| Bug | Triage | Triage, Ready, In Progress, In Review, In QA, Blocked, Done, Cancelled |
+| Task | Draft | Draft, Waiting, Ready, In Progress, In Review, In QA, Blocked, Done, Cancelled |
+| Bug | Triage | Triage, Waiting, Ready, In Progress, In Review, In QA, Blocked, Done, Cancelled |
 
 ### 4.3 Transitions
 
@@ -214,15 +214,19 @@ Không có Approved → Draft: thay đổi baseline đã chốt phải đi qua C
 
 | Từ | Sang | Ghi chú |
 |---|---|---|
-| Draft | Ready | G parent ở Approved hoặc In Progress |
+| Draft | Ready | G parent ở Approved hoặc In Progress, không còn blocked-by mở (còn → tự chuyển Waiting) |
+| Draft, Ready | Waiting | G parent ở Approved hoặc In Progress (từ Draft), ≥1 blocked-by mở; `apply` tự chuyển Task Ready có blocker |
+| Waiting | Ready | A khi issue blocked-by cuối cùng kết thúc (Done/Cancelled); G không còn blocked-by mở |
 | Ready | In Progress | G không còn blocked-by mở; tự assign, tạo branch |
 | In Progress | In Review | G có PR mở liên kết (`Closes #n`) |
 | In Review | In QA | Review đạt |
 | In Review, In QA | In Progress | Rework (lệnh `rework`) |
 | In QA | Done | G PR đã merge |
-| Draft, Ready, In Progress | Cancelled | G lý do |
+| Draft, Waiting, Ready, In Progress | Cancelled | G lý do |
 
 **Bug**: như Task, thay `Draft → Ready` bằng `Triage → Ready` (đã tái hiện được) và `Triage → Cancelled` (không phải lỗi/trùng, G lý do).
+
+**Waiting vs Blocked**: Waiting = chờ phụ thuộc đã lên kế hoạch (blocked-by), script tự vào/ra, không cần người; chỉ Task/Bug (container giữ Approved, trạng thái do rollup từ con). Blocked = cần người can thiệp.
 
 **Blocked (mọi loại)**: `X → Blocked` với X là trạng thái chưa kết thúc, G có `Blocked Reason` hoặc ≥1 blocked-by mở. `Blocked → X` chỉ về đúng trạng thái trước khi block.
 
@@ -235,6 +239,7 @@ Không có Approved → Draft: thay đổi baseline đã chốt phải đi qua C
 | reason | Có `--reason` không rỗng (ghi thành comment) |
 | parent_ready | Parent ở Approved hoặc In Progress |
 | no_open_blockers | Không có blocked-by đang mở |
+| has_open_blockers | Có ≥1 blocked-by đang mở |
 | pr_open | Có PR mở với `Closes #n` trỏ tới issue |
 | pr_merged | PR liên kết đã merge |
 | children_terminal | Mọi sub-issue ở Done/Cancelled |
@@ -312,7 +317,7 @@ Ranh giới:
 ```json
 {
   "max_rework": 3,
-  "statuses": ["Draft","Triage","Approved","Ready","In Progress","In Review","In QA","Blocked","Done","Cancelled"],
+  "statuses": ["Draft","Triage","Approved","Waiting","Ready","In Progress","In Review","In QA","Blocked","Done","Cancelled"],
   "terminal": ["Done","Cancelled"],
   "human_approval": ["Approved"],
   "types": {

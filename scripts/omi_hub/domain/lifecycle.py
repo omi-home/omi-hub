@@ -2,6 +2,7 @@
 from .errors import RuleError
 
 BLOCKED = "Blocked"
+WAITING = "Waiting"  # chờ issue blocked-by kết thúc; script tự chuyển, không cần người
 
 
 def _as_list(v):
