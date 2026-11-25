@@ -89,6 +89,31 @@ class TestPipeline(unittest.TestCase):
         self.assertEqual(self.g.developed, [3])
         self.assertEqual((self.T / "current").read_text(encoding="utf-8"), "3")
 
+    def docs_setup(self, task_refs, story_refs):
+        d = Path(self.tmp.name) / "docs"
+        d.mkdir()
+        (d / "spec.md").write_text("# Spec\n## Outbox\nghi outbox cùng transaction\n### Chi tiết\nbảng outbox\n"
+                                   "## Auth\nJWT ES256\n## Khác\nkhông lấy\n", encoding="utf-8")
+        self.g.add(2, "User Story", "In Progress", body=AC1 + "\n\n### Tham chiếu\n" + story_refs)
+        self.g.add(3, "Task", "In Progress", parent=2, body="### Việc cần làm\nx\n\n### Tham chiếu\n" + task_refs)
+
+    def test_ac109_1_context_includes_referenced_sections_only(self):
+        self.docs_setup("- docs/spec.md#outbox", "- docs/spec.md#auth\n- docs/spec.md#outbox")
+        with mock.patch("builtins.print"):
+            text = pipeline.context(self.cfg, 3)
+        self.assertIn("## Tham chiếu docs/spec.md#outbox\n## Outbox\nghi outbox cùng transaction\n### Chi tiết\nbảng outbox", text)
+        self.assertIn("## Tham chiếu docs/spec.md#auth\n## Auth\nJWT ES256", text)
+        self.assertEqual(text.count("## Tham chiếu docs/spec.md#outbox"), 1)  # task và parent trùng → một lần
+        self.assertNotIn("không lấy", text)
+
+    def test_ac109_2_context_warns_on_missing_reference(self):
+        self.docs_setup("- docs/spec.md#khong-co\n- docs/nope.md#a\n- ../ngoai-repo.md", "- docs/spec.md#auth")
+        with mock.patch("builtins.print"):
+            text = pipeline.context(self.cfg, 3)
+        for ref in ("docs/spec.md#khong-co", "docs/nope.md#a", "../ngoai-repo.md"):
+            self.assertIn(f"⚠️ Tham chiếu không tìm thấy: {ref}", text)
+        self.assertIn("JWT ES256", text)  # tham chiếu hợp lệ vẫn được ghép
+
     def test_start_draft_with_open_blocker_stops_at_waiting(self):
         self.g.add(2, "User Story", "Approved")
         self.g.add(3, "Task", "Draft", parent=2)

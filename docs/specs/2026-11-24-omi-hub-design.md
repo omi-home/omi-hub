@@ -144,6 +144,8 @@ Nguồn duy nhất: `scripts/omi_hub/config/templates.json`. Từ đó script **
 
 **Key work item trong plan**: `<chữ loại><NNN>` nối bằng dấu chấm theo cây — `E001`, `E001.S002`, `E001.S002.T003` (E=Epic, S=User Story, F=Functional Requirement, N=Non-Functional Requirement, T=Task, B=Bug); `validate_plan` từ chối key sai định dạng hoặc sai chữ loại.
 
+Mục tùy chọn `Tham chiếu` (User Story, Functional Requirement, Non-Functional Requirement, Change Request, Task, Bug): mỗi dòng `docs/<file>.md#<anchor>`; tài liệu kỹ thuật dùng chung nằm ở `docs/` của repo, issue chỉ trỏ tới đúng mục.
+
 Quy tắc kiểm tra: mục bắt buộc phải có heading `### <tên>` và nội dung khác giá trị mặc định / `_No response_`; mục checklist phải có ít nhất một dòng `- [ ] ...`; mục có danh sách lựa chọn phải đúng một lựa chọn; mục Affects phải chứa `#<số>`; HTML comment (gợi ý) không tính là nội dung. Audit không kiểm template issue (forms + CLI đã chặn lúc tạo).
 
 ### 3.7 Template PR
@@ -361,7 +363,7 @@ Blocked và rework là quy tắc chung, được `domain/` xử lý, không lặ
 | `template <type>` | In khung title + body chuẩn của loại (mục 3.6) |
 | `pr-lint N` | Kiểm title + body PR theo template PR (mục 3.7); in `PR OK` hoặc `PR FAIL` + lỗi; PR release (head = develop) bỏ qua |
 | `audit [--fix]` | Kiểm tra bất biến (mục 6.5) |
-| `context N` | In ngữ cảnh gọn cho LLM: issue, AC của parent, item Affects, quy ước test AC |
+| `context N` | In ngữ cảnh gọn cho LLM: issue, AC của parent, item Affects, quy ước test AC, và đúng các mục docs được tham chiếu trong `### Tham chiếu` của issue/parent (`docs/x.md#anchor`, cắt tới heading cùng cấp; thiếu file/mục hoặc ngoài repo → cảnh báo) |
 | `start [N]` | Chọn `next` nếu không có N; Draft→Ready→In Progress (còn blocked-by mở thì dừng ở Waiting, báo lỗi); checkout branch của issue |
 | `check` | Chạy lần lượt `commands.lint`, `typecheck`, `scan`, `test` (cái nào cấu hình); in `CHECK PASS` hoặc `CHECK FAIL (<bước>)` + 60 dòng cuối |
 | `submit N` | Push, tạo PR (`Closes #N`) nếu chưa có, → In Review. Chưa có marker review: ghi gói review `.omi/tmp/review-N.md`, in `REVIEW ... reviewers=code[,security]`. Đã có marker: in `REVIEW ... reviewers=none` |
