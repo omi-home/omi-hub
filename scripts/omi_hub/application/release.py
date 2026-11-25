@@ -23,7 +23,7 @@ def release(cfg, merge=False):
     if not main:
         raise RuleError("Chưa bật luồng release: chạy lại `init`")
     team = po_team(cfg["owner"])
-    owners = sync_po_team(cfg)
+    owners = set(gh.org_owners(cfg["owner"])) if merge else sync_po_team(cfg)  # --merge chỉ cần quyền đọc org
     pr = gh.open_pr_for_branch(cfg, dev)
     if merge:
         if pr is None:

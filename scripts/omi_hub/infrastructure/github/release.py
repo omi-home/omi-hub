@@ -63,8 +63,14 @@ def ensure_ruleset(cfg, branch):
         return str(e).splitlines()[0]
 
 
+def _logins(path):
+    """Login qua mọi trang (org/team có thể hơn 100 người)."""
+    sep = "&" if "?" in path else "?"
+    return client.run(["api", "--paginate", f"{path}{sep}per_page=100", "--jq", ".[].login"]).split()
+
+
 def org_owners(org):
-    return [m["login"] for m in client.rest("GET", f"orgs/{org}/members?role=admin&per_page=100")]
+    return _logins(f"orgs/{org}/members?role=admin")
 
 
 def ensure_team(cfg, slug):
@@ -79,7 +85,7 @@ def ensure_team(cfg, slug):
 
 
 def team_members(cfg, slug):
-    return [m["login"] for m in client.rest("GET", f"orgs/{cfg['owner']}/teams/{slug}/members?per_page=100")]
+    return _logins(f"orgs/{cfg['owner']}/teams/{slug}/members")
 
 
 def add_team_member(cfg, slug, login):

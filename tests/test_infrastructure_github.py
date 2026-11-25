@@ -153,5 +153,15 @@ class TestIssueOps(unittest.TestCase):
                 issues.close(self.CFG, 2, "completed")
 
 
+class TestPaginate(unittest.TestCase):
+    def test_org_owners_and_team_members_read_all_pages(self):
+        from omi_hub.infrastructure.github import release as rel
+        with mock.patch.object(client, "run", return_value="a\nb\n") as r:
+            self.assertEqual(rel.org_owners("o"), ["a", "b"])
+            self.assertEqual(rel.team_members({"owner": "o"}, "t"), ["a", "b"])
+        for call in r.call_args_list:
+            self.assertIn("--paginate", call.args[0])
+
+
 if __name__ == "__main__":
     unittest.main()
