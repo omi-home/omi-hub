@@ -51,6 +51,32 @@ class TestApply(unittest.TestCase):
         with self.assertRaisesRegex(RuleError, "key E001 đã là #1"):
             self.run_apply({"E001": {"number": 1, "title": "[Epic] Plan cũ"}}, approve=True)
 
+    def test_blocked_by_links_missing_only(self):
+        plan = json.loads(json.dumps(self.PLAN))
+        story = plan["items"][0]["children"][0]
+        story["children"].append({"key": "E001.S001.T002", "type": "Task", "title": "Thêm UI đặt hàng",
+                                  "body": "### Việc cần làm\nForm\n\n### Definition of done\n- [ ] Test pass",
+                                  "blocked_by": ["E001.S001.T001", 50, "E000.T009"]})
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as f:
+            json.dump(plan, f)
+        existing = {"E001": {"number": 7, "title": "[Epic] Quản lý đơn hàng"},
+                    "E000.T009": {"number": 9, "title": "x"}}
+        with mock.patch.object(items, "new_item", side_effect=[8, 10, 11]), \
+                mock.patch.object(plans.gh, "existing_keys", return_value=existing), \
+                mock.patch.object(plans.gh, "ensure_milestone"), \
+                mock.patch.object(plans.gh, "blocker_numbers", return_value=[50]), \
+                mock.patch.object(plans.gh, "issue_db_id", side_effect=lambda c, n: n * 1000), \
+                mock.patch.object(plans.gh, "add_blocked_by") as add:
+            plans.apply({}, WF, f.name)
+        add.assert_has_calls([mock.call({}, 11, 10000), mock.call({}, 11, 9000)])
+        self.assertEqual(add.call_count, 2)
+        plan["items"][0]["children"][0]["children"][1]["blocked_by"] = ["E404"]
+        Path(f.name).write_text(json.dumps(plan), encoding="utf-8")
+        with mock.patch.object(plans.gh, "existing_keys", return_value=existing), \
+                self.assertRaisesRegex(RuleError, "E404"):
+            plans.apply({}, WF, f.name)
+        Path(f.name).unlink()
+
     def test_invalid_plan_rejected(self):
         bad = {"items": [{"key": "T001", "type": "Task", "title": "x"}]}
         with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as f:

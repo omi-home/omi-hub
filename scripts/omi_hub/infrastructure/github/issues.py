@@ -80,6 +80,13 @@ def add_blocked_by(cfg, n, blocker_db_id):
     client.rest("POST", f"{client.repo_path(cfg)}/issues/{n}/dependencies/blocked_by", {"issue_id": blocker_db_id})
 
 
+def blocker_numbers(cfg, n):
+    q = """query($owner: String!, $repo: String!, $number: Int!) {
+      repository(owner: $owner, name: $repo) { issue(number: $number) { blockedBy(first: 100) { nodes { number } } } } }"""
+    d = client.graphql(q, owner=cfg["owner"], repo=cfg["repo"], number=n)
+    return [b["number"] for b in d["repository"]["issue"]["blockedBy"]["nodes"]]
+
+
 def comment(cfg, n, body):
     client.rest("POST", f"{client.repo_path(cfg)}/issues/{n}/comments", {"body": body})
 

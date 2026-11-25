@@ -55,6 +55,9 @@ def validate_plan(wf, plan, tpl=None):
             errs.append(f"{k}: Epic cần milestone (plan.milestone hoặc node.milestone)")
         if node.get("milestone") and parent_type is not None:
             errs.append(f"{k}: milestone chỉ đặt ở node gốc; node con kế thừa milestone của parent")
+        for b in node.get("blocked_by", []):
+            if isinstance(b, bool) or not isinstance(b, (str, int)) or b == k:
+                errs.append(f"{k}: blocked_by '{b}' phải là key node khác hoặc số issue")
         for c in node.get("children", []):
             walk(c, t)
 

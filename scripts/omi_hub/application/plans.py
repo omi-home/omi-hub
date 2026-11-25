@@ -21,13 +21,19 @@ def apply(cfg, wf, plan_path, approve=False):
         raise RuleError(errs)
     found = gh.existing_keys(cfg)
 
-    def clashes(node):
+    def walk(node):
+        yield node
+        for c in node.get("children", []):
+            yield from walk(c)
+    nodes = [x for n in plan["items"] for x in walk(n)]
+    known = {x["key"] for x in nodes} | set(found)
+    errs = []
+    for node in nodes:
         old = found.get(node["key"])
         if old and old["title"] != with_prefix(tpl, node["type"], node["title"]):
-            yield f"key {node['key']} đã là #{old['number']} '{old['title']}' — đổi key hoặc sửa title cho khớp"
-        for c in node.get("children", []):
-            yield from clashes(c)
-    errs = [e for n in plan["items"] for e in clashes(n)]
+            errs.append(f"key {node['key']} đã là #{old['number']} '{old['title']}' — đổi key hoặc sửa title cho khớp")
+        errs += [f"{node['key']}: blocked_by key '{b}' không có trong plan hay repo"
+                 for b in node.get("blocked_by", []) if isinstance(b, str) and b not in known]
     if errs:  # trước khi tạo gì: key trùng plan khác sẽ gắn nhầm cả cây con
         raise RuleError(errs)
     keys = {k: v["number"] for k, v in found.items()}
@@ -50,4 +56,18 @@ def apply(cfg, wf, plan_path, approve=False):
 
     for node in plan["items"]:
         create(node, node.get("parent"))
+
+    # Sau khi cả cây đã có số: thêm quan hệ còn thiếu (chạy lại apply bổ sung được cho issue cũ).
+    for node in nodes:
+        refs = node.get("blocked_by", [])
+        if not refs:
+            continue
+        n = keys[node["key"]]
+        have = set(gh.blocker_numbers(cfg, n))
+        for b in refs:
+            bn = keys[b] if isinstance(b, str) else b
+            if bn not in have:
+                gh.add_blocked_by(cfg, n, gh.issue_db_id(cfg, bn))
+                have.add(bn)
+                print(f"#{n} blocked by #{bn}")
     return keys

@@ -61,6 +61,10 @@ class TestValidatePlan(unittest.TestCase):
         p = self.plan([{"key": "T001", "type": "Task", "title": "T", "parent": 42}])
         self.assertEqual(planning.validate_plan(WF, p), [])
 
+    def test_blocked_by_format(self):
+        p = self.plan([{"key": "T001", "type": "Task", "title": "T", "parent": 42, "blocked_by": ["T001", 5, {"x": 1}]}])
+        self.assertEqual(len([e for e in planning.validate_plan(WF, p) if "blocked_by" in e]), 2)
+
     def test_milestone_only_on_root(self):
         p = self.plan([{"key": "E001", "type": "Epic", "title": "E", "milestone": "M0", "children": [
             {"key": "E001.S001", "type": "User Story", "title": "S", "body": AC, "milestone": "M1"}]},

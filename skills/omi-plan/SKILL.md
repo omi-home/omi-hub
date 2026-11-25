@@ -11,6 +11,7 @@ description: Phân rã PRD thành plan JSON omi (Epic → Story/Functional Requi
    - Story/Functional Requirement/Non-Functional Requirement có `### Acceptance criteria` dạng `- [ ]`, mỗi dòng kiểm chứng được bằng test; không tự động hóa được thì ghi `[manual]`.
    - Title và body mỗi node theo template của loại (`OMI_CLI template <type>`, mục `### ...` đúng tên).
    - Key phân cấp ổn định (`E001.S002.T003`). Key duy nhất trong cả repo: plan mới dùng số Epic chưa có (apply báo lỗi nếu key đã thuộc issue khác title). Gắn vào issue có sẵn: `"parent": <số>` ở node gốc. Milestone chỉ ở `plan.milestone` hoặc node gốc không có `parent` (con kế thừa); mỗi milestone khác nhau là một Epic gốc riêng; apply tự tạo milestone chưa có.
+   - Phụ thuộc: `"blocked_by": ["<key>", <số issue>]` ở node phải chờ (key trong plan này hoặc đã có trong repo, kể cả plan milestone trước). Khai báo cho mọi Task/Story có thứ tự thực sự; `next` bỏ qua item còn blocker mở.
 
 ```json
 {"milestone": "v1.0", "items": [
@@ -19,6 +20,8 @@ description: Phân rã PRD thành plan JSON omi (Epic → Story/Functional Requi
     {"key": "E001.S001", "type": "User Story", "title": "Khách hàng có thể đặt hàng", "estimate": 3,
      "body": "### Story\nLà khách, tôi muốn ... để ...\n\n### Acceptance criteria\n- [ ] ...", "children": [
       {"key": "E001.S001.T001", "type": "Task", "title": "Thêm API POST /orders",
+       "body": "### Việc cần làm\n...\n\n### Definition of done\n- [ ] Test pass"},
+      {"key": "E001.S001.T002", "type": "Task", "title": "Thêm form đặt hàng", "blocked_by": ["E001.S001.T001"],
        "body": "### Việc cần làm\n...\n\n### Definition of done\n- [ ] Test pass"}]}]}]}
 ```
 3. `OMI_CLI plan-show <file>`: lỗi → sửa file, chạy lại. Hợp lệ → báo người dùng đường dẫn file và bảo họ xem output cây (không chép lại cây).
