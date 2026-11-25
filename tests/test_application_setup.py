@@ -1,3 +1,4 @@
+import json
 import os
 import tempfile
 import unittest
@@ -44,6 +45,8 @@ class TestWriteTemplates(unittest.TestCase):
             dest = ws / "app"  # repo là thư mục con của workspace
             dest.mkdir()
             (ws / "AGENTS.md").write_text("# Dự án X\n", encoding="utf-8")
+            (ws / ".claude").mkdir()
+            (ws / ".claude/settings.json").write_text('{"model": "opus"}', encoding="utf-8")
             setup.write_templates("acme/omi-hub", dest, ws)
             setup.write_templates("acme/omi-hub", dest, ws)  # chạy lại không nhân đôi
             agents = (ws / "AGENTS.md").read_text(encoding="utf-8")
@@ -62,6 +65,11 @@ class TestWriteTemplates(unittest.TestCase):
             self.assertIn("### Liên kết", pr_md)
             self.assertIn("### Security", pr_md)
             self.assertLessEqual(len(agents.splitlines()), 20)  # giữ AGENTS.md ngắn: nạp vào mọi phiên
+            settings = json.loads((ws / ".claude/settings.json").read_text(encoding="utf-8"))
+            self.assertEqual(settings["model"], "opus")  # giữ cấu hình cũ
+            self.assertEqual(settings["enabledPlugins"], {"omi-hub@omi-home": True})
+            self.assertEqual(settings["extraKnownMarketplaces"]["omi-home"]["source"]["repo"], "acme/omi-hub")
+            self.assertFalse((dest / ".claude").exists())
 
 if __name__ == "__main__":
     unittest.main()

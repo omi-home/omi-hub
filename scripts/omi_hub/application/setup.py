@@ -33,6 +33,18 @@ def write_templates(hub_repo, repo=Path("."), workspace=Path(".")):
     old = agents.read_text(encoding="utf-8") if agents.exists() else ""
     agents.write_text(merge_agents_md(old, (TEMPLATES / "AGENTS.md").read_text(encoding="utf-8")),
                       encoding="utf-8")
+    enable_plugin(hub_repo, workspace)
+
+
+def enable_plugin(hub_repo, workspace):
+    """Gộp vào `.claude/settings.json` của workspace: marketplace hub + bật plugin (giữ cấu hình khác)."""
+    market = json.loads((TEMPLATES.parent / ".claude-plugin" / "marketplace.json").read_text(encoding="utf-8"))
+    path = workspace / ".claude" / "settings.json"
+    s = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    s.setdefault("extraKnownMarketplaces", {})[market["name"]] = {"source": {"source": "github", "repo": hub_repo}}
+    s.setdefault("enabledPlugins", {})[f"{market['plugins'][0]['name']}@{market['name']}"] = True
+    path.parent.mkdir(exist_ok=True)
+    path.write_text(json.dumps(s, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
 DEVELOP = "develop"
