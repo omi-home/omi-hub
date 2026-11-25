@@ -61,5 +61,12 @@ class TestValidatePlan(unittest.TestCase):
         p = self.plan([{"key": "T001", "type": "Task", "title": "T", "parent": 42}])
         self.assertEqual(planning.validate_plan(WF, p), [])
 
+    def test_milestone_only_on_root(self):
+        p = self.plan([{"key": "E001", "type": "Epic", "title": "E", "milestone": "M0", "children": [
+            {"key": "E001.S001", "type": "User Story", "title": "S", "body": AC, "milestone": "M1"}]},
+            {"key": "T001", "type": "Task", "title": "T", "parent": 42, "milestone": "M1"}])
+        errs = planning.validate_plan(WF, p)
+        self.assertEqual([e.split(":")[0] for e in errs if "node gốc" in e], ["E001.S001", "T001"])
+
 if __name__ == "__main__":
     unittest.main()
