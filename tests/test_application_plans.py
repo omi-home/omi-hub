@@ -28,9 +28,11 @@ class TestApply(unittest.TestCase):
         with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as f:
             json.dump(self.PLAN, f)
         with mock.patch.object(items, "new_item", fake_new), \
-                mock.patch.object(plans.gh, "existing_keys", return_value=existing):
+                mock.patch.object(plans.gh, "existing_keys", return_value=existing), \
+                mock.patch.object(plans.gh, "ensure_milestone") as em:
             keys = plans.apply({}, WF, f.name, approve)
         Path(f.name).unlink()
+        em.assert_called_once_with({}, "v1")
         return calls, keys
 
     def test_creates_parent_first_with_approved_statuses(self):
