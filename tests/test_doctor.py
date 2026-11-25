@@ -8,9 +8,10 @@ from unittest import mock
 
 import support  # noqa: F401  (sys.path)
 from omi_hub.application import doctor, setup
+from omi_hub.config import load_workflow
 from omi_hub.infrastructure.github.client import GhError
 
-FIELDS = {"Status": {"id": "F"}}
+FIELDS = {"Status": {"id": "F", "options": {s: s for s in load_workflow()["statuses"]}}}
 
 
 class FakeGh:
@@ -101,6 +102,11 @@ class TestDoctor(unittest.TestCase):
         (self.ws / ".claude/settings.json").write_text('{"model": "opus"}', encoding="utf-8")
         self.cfg["commands"] = {}
         del self.cfg["main_branch"]
+        old = {"Status": {"id": "F", "options": {s: s for s in load_workflow()["statuses"] if s != "Waiting"}}}
+        self.cfg["fields"] = old
+        _, lines = self.run_doctor(fields=old)
+        self.assertIn("thiếu option Waiting", self.line(lines, "fields"))
+        self.cfg["fields"] = FIELDS
         code, lines = self.run_doctor(fields={"Status": {"id": "OTHER"}})
         self.assertEqual(code, 1)
         self.assertIn("omi-hub@omi-home", self.line(lines, "settings.json"))

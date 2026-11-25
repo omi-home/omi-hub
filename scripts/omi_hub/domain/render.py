@@ -28,7 +28,9 @@ def render_plan(plan):
 
     def walk(node, depth):
         ac = f" (AC:{len(parse_ac(node.get('body', '')))})" if node["type"] in AC_TYPES else ""
-        lines.append(f"{'  ' * depth}{node['key']} [{node['type']}] {node['title']}{ac}")
+        dep = " ⛔ " + ", ".join(f"#{b}" if isinstance(b, int) else b for b in node["blocked_by"]) \
+            if node.get("blocked_by") else ""
+        lines.append(f"{'  ' * depth}{node['key']} [{node['type']}] {node['title']}{ac}{dep}")
         for c in node.get("children", []):
             walk(c, depth + 1)
 

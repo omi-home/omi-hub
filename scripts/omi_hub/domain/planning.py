@@ -55,12 +55,37 @@ def validate_plan(wf, plan, tpl=None):
             errs.append(f"{k}: Epic cần milestone (plan.milestone hoặc node.milestone)")
         if node.get("milestone") and parent_type is not None:
             errs.append(f"{k}: milestone chỉ đặt ở node gốc; node con kế thừa milestone của parent")
-        for b in node.get("blocked_by", []):
+        refs = node.get("blocked_by", [])
+        if refs and t != "Task":
+            # guard Ready→In Progress và `next` chỉ xét blocker của chính Task, không xét của cha
+            errs.append(f"{k}: blocked_by chỉ đặt ở Task (đặt ở {t} không chặn được Task con)")
+        for b in refs:
             if isinstance(b, bool) or not isinstance(b, (str, int)) or b == k:
                 errs.append(f"{k}: blocked_by '{b}' phải là key node khác hoặc số issue")
+        deps[k] = [b for b in refs if isinstance(b, str) and b != k]
         for c in node.get("children", []):
             walk(c, t)
 
+    deps = {}
     for node in plan.get("items", []):
         walk(node, _EXISTING if "parent" in node else None)
+    errs.extend(f"blocked_by vòng lặp: {' → '.join(c)}" for c in _cycles(deps))
     return errs
+
+
+def _cycles(deps):
+    state, out = {}, []
+
+    def dfs(k, path):
+        state[k] = 1
+        for d in deps.get(k, []):
+            if state.get(d) == 1:
+                out.append(path[path.index(d):] + [d])
+            elif d in deps and d not in state:
+                dfs(d, path + [d])
+        state[k] = 2
+
+    for k in deps:
+        if k not in state:
+            dfs(k, [k])
+    return out

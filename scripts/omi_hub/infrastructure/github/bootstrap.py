@@ -4,7 +4,7 @@ import json
 
 from . import client, project
 
-STATUS_COLORS = {"Draft": "GRAY", "Triage": "PINK", "Approved": "PURPLE", "Ready": "BLUE",
+STATUS_COLORS = {"Draft": "GRAY", "Triage": "PINK", "Approved": "PURPLE", "Waiting": "GRAY", "Ready": "BLUE",
                  "In Progress": "YELLOW", "In Review": "ORANGE", "In QA": "ORANGE",
                  "Blocked": "RED", "Done": "GREEN", "Cancelled": "GRAY"}
 UPDATE_STATUS = """mutation($field: ID!, $options: [ProjectV2SingleSelectFieldOptionInput!]) {
@@ -72,14 +72,17 @@ def _field_list(owner, number):
 def ensure_fields(owner, number, wf):
     fields = {f["name"]: f for f in _field_list(owner, number)}
     status = fields["Status"]
-    if [o["name"] for o in status.get("options", [])] != wf["statuses"]:
-        items = json.loads(client.run(["project", "item-list", str(number), "--owner", owner,
-                                "--format", "json", "--limit", "1"]))["items"]
-        if items:
-            raise client.GhError(f"Status của Project #{number} khác chuẩn omi và đã có item. "
-                          f"Sửa tay options Status thành: {', '.join(wf['statuses'])}")
-        client.graphql(UPDATE_STATUS, field=status["id"],
-                options=[{"name": s, "color": STATUS_COLORS[s], "description": ""} for s in wf["statuses"]])
+    have = {o["name"]: o["id"] for o in status.get("options", [])}
+    if list(have) != wf["statuses"]:
+        extra = set(have) - set(wf["statuses"])
+        if extra and json.loads(client.run(["project", "item-list", str(number), "--owner", owner,
+                                            "--format", "json", "--limit", "1"]))["items"]:
+            raise client.GhError(f"Status của Project #{number} có option ngoài chuẩn omi ({', '.join(sorted(extra))}) "
+                                 f"và đã có item. Sửa tay options Status thành: {', '.join(wf['statuses'])}")
+        # Gửi kèm id option cũ để giữ nguyên Status của item (chỉ thêm/sắp xếp lại, không xoá).
+        client.graphql(UPDATE_STATUS, field=status["id"], options=[
+            {**({"id": have[s]} if s in have else {}), "name": s, "color": STATUS_COLORS[s], "description": ""}
+            for s in wf["statuses"]])
     wanted = {"Priority": ("SINGLE_SELECT", ",".join(wf["priorities"])), "Estimate": ("NUMBER", None),
               "Rework Count": ("NUMBER", None), "Blocked Reason": ("TEXT", None)}
     for name, (dtype, opts) in wanted.items():

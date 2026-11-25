@@ -5,6 +5,7 @@ from pathlib import Path
 from omi_hub.application import items
 from omi_hub.config import load_templates
 from omi_hub.domain.errors import RuleError
+from omi_hub.domain.lifecycle import WAITING
 from omi_hub.domain.planning import validate_plan
 from omi_hub.domain.templates import with_prefix
 from omi_hub.infrastructure.github import gateway as gh
@@ -70,4 +71,7 @@ def apply(cfg, wf, plan_path, approve=False):
                 gh.add_blocked_by(cfg, n, gh.issue_db_id(cfg, bn))
                 have.add(bn)
                 print(f"#{n} blocked by #{bn}")
+        s = gh.issue_snapshot(cfg, n)
+        if s["status"] == "Ready" and s["open_blockers"]:
+            items.move(cfg, wf, n, WAITING)
     return keys

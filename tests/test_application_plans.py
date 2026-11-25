@@ -66,10 +66,11 @@ class TestApply(unittest.TestCase):
                 mock.patch.object(plans.gh, "ensure_milestone"), \
                 mock.patch.object(plans.gh, "blocker_numbers", return_value=[50]), \
                 mock.patch.object(plans.gh, "issue_db_id", side_effect=lambda c, n: n * 1000), \
-                mock.patch.object(plans.gh, "add_blocked_by") as add:
+                mock.patch.object(plans.gh, "add_blocked_by") as add,                 mock.patch.object(plans.gh, "issue_snapshot", return_value={"status": "Ready", "open_blockers": 2}),                 mock.patch.object(items, "move") as mv:
             plans.apply({}, WF, f.name)
         add.assert_has_calls([mock.call({}, 11, 10000), mock.call({}, 11, 9000)])
         self.assertEqual(add.call_count, 2)
+        mv.assert_called_once_with({}, WF, 11, "Waiting")
         plan["items"][0]["children"][0]["children"][1]["blocked_by"] = ["E404"]
         Path(f.name).write_text(json.dumps(plan), encoding="utf-8")
         with mock.patch.object(plans.gh, "existing_keys", return_value=existing), \

@@ -12,6 +12,7 @@ GUARDS = {
         "Parent phải ở Approved hoặc In Progress"),
     "no_open_blockers": lambda s, r: (
         s["open_blockers"] == 0, f"Còn {s['open_blockers']} issue blocked-by đang mở"),
+    "has_open_blockers": lambda s, r: (s["open_blockers"] > 0, "Waiting cần ít nhất 1 issue blocked-by đang mở"),
     "pr_open": lambda s, r: (
         any(p["state"] == "OPEN" for p in s["prs"]), "Cần PR đang mở có 'Closes #<số issue>'"),
     "pr_merged": lambda s, r: (any(p["merged"] for p in s["prs"]), "PR liên kết chưa merge"),

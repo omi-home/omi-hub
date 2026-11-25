@@ -18,14 +18,16 @@ class TestWorkflowFile(unittest.TestCase):
         self.assertEqual(lifecycle.allowed_statuses(WF, "Change Request"),
                          {"Triage", "Approved", "In Progress", "Blocked", "Done", "Cancelled"})
         self.assertEqual(lifecycle.allowed_statuses(WF, "Task"),
-                         {"Draft", "Ready", "In Progress", "In Review", "In QA", "Blocked", "Done", "Cancelled"})
+                         {"Draft", "Waiting", "Ready", "In Progress", "In Review", "In QA", "Blocked", "Done", "Cancelled"})
         self.assertEqual(lifecycle.allowed_statuses(WF, "Bug"),
-                         {"Triage", "Ready", "In Progress", "In Review", "In QA", "Blocked", "Done", "Cancelled"})
+                         {"Triage", "Waiting", "Ready", "In Progress", "In Review", "In QA", "Blocked", "Done", "Cancelled"})
 
 
 class TestTransition(unittest.TestCase):
     def test_task_happy_path_guards(self):
-        self.assertEqual(lifecycle.transition(WF, "Task", "Draft", "Ready"), ["parent_ready"])
+        self.assertEqual(lifecycle.transition(WF, "Task", "Draft", "Ready"), ["parent_ready", "no_open_blockers"])
+        self.assertEqual(lifecycle.transition(WF, "Task", "Draft", "Waiting"), ["parent_ready", "has_open_blockers"])
+        self.assertEqual(lifecycle.transition(WF, "Task", "Waiting", "Ready"), ["no_open_blockers"])
         self.assertEqual(lifecycle.transition(WF, "Task", "Ready", "In Progress"), ["no_open_blockers"])
         self.assertEqual(lifecycle.transition(WF, "Task", "In Progress", "In Review"), ["pr_open"])
         self.assertEqual(lifecycle.transition(WF, "Task", "In Review", "In QA"), [])

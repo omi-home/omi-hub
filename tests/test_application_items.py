@@ -15,7 +15,7 @@ class FakeGh:
     """GitHub trong bộ nhớ, đủ cho các lệnh move/rework/block."""
 
     def __init__(self):
-        self.issues, self.notes, self.assigned = {}, {}, []
+        self.issues, self.notes, self.assigned, self.blockers = {}, {}, [], {}
 
     def add(self, n, type_, status, parent=None, state="OPEN", prs=(), body="", labels=()):
         self.issues[n] = {"number": n, "id": f"N{n}", "title": f"#{n}", "type": type_, "status": status,
@@ -25,6 +25,7 @@ class FakeGh:
 
     def issue_snapshot(self, cfg, n):
         s = dict(self.issues[n], item_id=f"I{n}")
+        s["open_blockers"] += sum(self.issues[b]["state"] == "OPEN" for b in self.blockers.get(n, []))
         p = self.issues.get(s["parent"])
         s["parent"] = {"number": p["number"], "type": p["type"], "status": p["status"]} if p else None
         s["children"] = [{"number": c["number"], "type": c["type"], "status": c["status"], "state": c["state"]}
@@ -48,6 +49,9 @@ class FakeGh:
 
     def assign_self(self, cfg, n):
         self.assigned.append(n)
+
+    def open_dependents(self, cfg, n):
+        return [d for d, bs in self.blockers.items() if n in bs and self.issues[d]["state"] == "OPEN"]
 
 
 MERGED = [{"number": 99, "state": "MERGED", "merged": True}]
@@ -144,6 +148,22 @@ class TestFlow(unittest.TestCase):
         self.assertEqual(self.st(5), "Done")
         self.assertIn("Change Request #5", self.g.notes[2][-1])
         self.assertEqual(self.st(1), "Done")
+
+    def test_ready_with_open_blocker_goes_waiting_then_auto_ready(self):
+        self.g.add(2, "User Story", "Approved")
+        self.g.add(3, "Task", "In QA", parent=2, prs=MERGED)
+        self.g.add(4, "Task", "Draft", parent=2)
+        self.g.add(5, "Task", "Draft", parent=2)
+        self.g.blockers = {4: [3], 5: [3, 6]}
+        self.g.add(6, "Task", "Ready", parent=2)
+        items.move(CFG, WF, 4, "Ready")
+        items.move(CFG, WF, 5, "Ready")
+        self.assertEqual((self.st(4), self.st(5)), ("Waiting", "Waiting"))
+        items.move(CFG, WF, 3, "Done")
+        self.assertEqual((self.st(4), self.st(5)), ("Ready", "Waiting"))  # #5 còn chờ #6
+        self.assertIn("hết blocker (#3", self.g.notes[4][-1])
+        with self.assertRaisesRegex(RuleError, "blocked-by đang mở"):
+            items.move(CFG, WF, 5, "Ready")
 
 
 class TestViews(unittest.TestCase):

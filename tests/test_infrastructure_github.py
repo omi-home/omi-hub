@@ -108,6 +108,29 @@ class TestEnsureViews(unittest.TestCase):
         self.assertEqual(g.call_count, 4)  # Board đã có; Hierarchy không filter
 
 
+class TestEnsureFields(unittest.TestCase):
+    OLD = ["Draft", "Triage", "Approved", "Ready", "In Progress", "In Review", "In QA", "Blocked", "Done", "Cancelled"]
+
+    def run_ensure(self, names, has_items):
+        from omi_hub.infrastructure.github import bootstrap
+        fields = [{"name": "Status", "id": "F", "options": [{"name": n, "id": f"o{i}"} for i, n in enumerate(names)]},
+                  *({"name": n} for n in ("Priority", "Estimate", "Rework Count", "Blocked Reason"))]
+        with mock.patch.object(bootstrap, "_field_list", return_value=fields),                 mock.patch.object(client, "run", return_value=json.dumps({"items": [1] if has_items else []})),                 mock.patch.object(client, "graphql") as g:
+            bootstrap.ensure_fields("o", 1, support.WF)
+        return g
+
+    def test_adds_waiting_keeping_option_ids(self):
+        g = self.run_ensure(self.OLD, has_items=True)
+        opts = g.call_args.kwargs["options"]
+        self.assertEqual([o["name"] for o in opts][3:5], ["Waiting", "Ready"])
+        self.assertEqual(opts[3].get("id"), None)
+        self.assertEqual([o["id"] for o in opts if o["name"] != "Waiting"], [f"o{i}" for i in range(10)])
+
+    def test_refuses_dropping_custom_option_with_items(self):
+        with self.assertRaisesRegex(client.GhError, "Foo"):
+            self.run_ensure(self.OLD + ["Foo"], has_items=True)
+
+
 class TestRun(unittest.TestCase):
     def test_error_hint(self):
         fake = mock.Mock(returncode=1, stdout="", stderr="INSUFFICIENT_SCOPES: need project")

@@ -5,6 +5,7 @@ from pathlib import Path
 
 from omi_hub.application import setup
 from omi_hub.application.workspace import repo_dir
+from omi_hub.config import load_workflow
 from omi_hub.infrastructure.github import gateway as gh
 
 PLUGIN_JSON = setup.TEMPLATES.parent / ".claude-plugin" / "plugin.json"
@@ -71,6 +72,9 @@ def check_config(cfg):
 def check_fields(cfg):
     if gh.load_fields(cfg["owner"], cfg["project_number"]) != cfg["fields"]:
         raise Fail("fields khác Project trên GitHub", INIT)
+    missing = [s for s in load_workflow()["statuses"] if s not in cfg["fields"]["Status"].get("options", {})]
+    if missing:  # plugin mới thêm status (vd. Waiting): init thêm option, giữ Status của item
+        raise Fail(f"Status thiếu option {', '.join(missing)}", INIT)
 
 
 def check_variable(cfg):

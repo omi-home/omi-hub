@@ -80,11 +80,19 @@ def add_blocked_by(cfg, n, blocker_db_id):
     client.rest("POST", f"{client.repo_path(cfg)}/issues/{n}/dependencies/blocked_by", {"issue_id": blocker_db_id})
 
 
+def _deps(cfg, n, conn):
+    q = f"""query($owner: String!, $repo: String!, $number: Int!) {{
+      repository(owner: $owner, name: $repo) {{ issue(number: $number) {{ {conn}(first: 100) {{ nodes {{ number state }} }} }} }} }}"""
+    return client.graphql(q, owner=cfg["owner"], repo=cfg["repo"], number=n)["repository"]["issue"][conn]["nodes"]
+
+
 def blocker_numbers(cfg, n):
-    q = """query($owner: String!, $repo: String!, $number: Int!) {
-      repository(owner: $owner, name: $repo) { issue(number: $number) { blockedBy(first: 100) { nodes { number } } } } }"""
-    d = client.graphql(q, owner=cfg["owner"], repo=cfg["repo"], number=n)
-    return [b["number"] for b in d["repository"]["issue"]["blockedBy"]["nodes"]]
+    return [b["number"] for b in _deps(cfg, n, "blockedBy")]
+
+
+def open_dependents(cfg, n):
+    """Issue đang mở bị n chặn (n blocks chúng)."""
+    return [b["number"] for b in _deps(cfg, n, "blocking") if b["state"] == "OPEN"]
 
 
 def comment(cfg, n, body):
