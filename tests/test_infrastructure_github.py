@@ -92,6 +92,22 @@ class TestSetField(unittest.TestCase):
             project.set_field(CFG, "ITEM", "Status", "Nope")
 
 
+class TestEnsureViews(unittest.TestCase):
+    def test_creates_missing_views_with_filter(self):
+        from omi_hub.infrastructure.github import bootstrap
+        views = [{"name": "Board", "layout": "BOARD_LAYOUT", "filter": "-status:Done"},
+                 {"name": "Hierarchy", "layout": "TABLE_LAYOUT"},
+                 {"name": "Delivery", "layout": "TABLE_LAYOUT", "filter": "type:Task,Bug"}]
+        with mock.patch.object(client, "graphql", side_effect=[
+                {"node": {"views": {"nodes": [{"name": "View 1"}, {"name": "Board"}]}}},
+                {"createProjectV2View": {"projectV2View": {"id": "V_H"}}},
+                {"createProjectV2View": {"projectV2View": {"id": "V_D"}}},
+                {}]) as g:
+            self.assertEqual(bootstrap.ensure_views("P", views), ["Hierarchy", "Delivery"])
+        self.assertEqual(g.call_args.kwargs, {"v": "V_D", "filter": "type:Task,Bug"})
+        self.assertEqual(g.call_count, 4)  # Board đã có; Hierarchy không filter
+
+
 class TestRun(unittest.TestCase):
     def test_error_hint(self):
         fake = mock.Mock(returncode=1, stdout="", stderr="INSUFFICIENT_SCOPES: need project")

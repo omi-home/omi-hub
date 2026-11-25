@@ -1,6 +1,6 @@
-# Tạo 5 view cho Project mẫu (làm một lần cho mỗi org)
+# 5 view của Project (init tạo, chỉnh tay group by/sort)
 
-API GitHub chưa cho tạo view, nên tạo tay trong Project "OMI Template" (sau `omi init --template-only`):
+`omi init` (không `--from-template`) tự tạo 5 view dưới đây với layout + filter qua GraphQL. API chưa cho đặt group by/column by/sort/cột hiển thị theo tên field, nên chỉnh tay phần đó (Board mặc định chia cột theo Status):
 
 | View | Layout | Cấu hình |
 |---|---|---|

@@ -97,3 +97,25 @@ def load_fields(owner, number):
             if f.get("options"):
                 out[f["name"]]["options"] = {o["name"]: o["id"] for o in f["options"]}
     return out
+
+
+VIEWS_QUERY = "query($p: ID!) { node(id: $p) { ... on ProjectV2 { views(first: 50) { nodes { name } } } } }"
+CREATE_VIEW = """mutation($p: ID!, $name: String!, $layout: ProjectV2ViewLayout!) {
+  createProjectV2View(input: {projectId: $p, name: $name, layout: $layout}) { projectV2View { id } } }"""
+FILTER_VIEW = """mutation($v: ID!, $filter: String!) {
+  updateProjectV2View(input: {viewId: $v, filter: $filter}) { projectV2View { id } } }"""
+
+
+def ensure_views(project_id, views):
+    """Tạo view còn thiếu theo tên (layout + filter); group by/sort API chưa hỗ trợ. Trả tên view vừa tạo."""
+    have = {v["name"] for v in client.graphql(VIEWS_QUERY, p=project_id)["node"]["views"]["nodes"]}
+    made = []
+    for v in views:
+        if v["name"] in have:
+            continue
+        vid = client.graphql(CREATE_VIEW, p=project_id, name=v["name"],
+                             layout=v["layout"])["createProjectV2View"]["projectV2View"]["id"]
+        if v.get("filter"):
+            client.graphql(FILTER_VIEW, v=vid, filter=v["filter"])
+        made.append(v["name"])
+    return made
