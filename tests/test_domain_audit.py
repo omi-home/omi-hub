@@ -58,6 +58,7 @@ class TestInvariants(unittest.TestCase):
     def test_waiting_without_open_blocker(self):
         self.assertEqual(inv(item(status="Waiting"))[0]["fix"], ("status", "Ready"))
         self.assertEqual(inv(item(status="Waiting", open_blockers=1)), [])
+        self.assertEqual(inv(item(status="Ready", open_blockers=1))[0]["fix"], ("status", "Waiting"))
 
     def test_milestone_drift(self):
         self.assertEqual(inv(item(milestone="v2"))[0]["fix"], ("milestone", "v1"))

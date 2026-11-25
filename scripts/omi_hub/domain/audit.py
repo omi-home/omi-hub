@@ -39,6 +39,8 @@ def check_invariants(wf, item, by_number):
         bad("Blocked nhưng không có Blocked Reason hay blocked-by")
     if st == WAITING and not closed and item["open_blockers"] == 0:
         bad("Waiting nhưng không còn blocked-by mở", ("status", "Ready"))
+    if st == "Ready" and item["open_blockers"] and WAITING in allowed_statuses(wf, t):
+        bad("Ready nhưng còn blocked-by mở", ("status", WAITING))  # blocked-by thêm tay trên GitHub
     if parent and parent["milestone"] and item["milestone"] != parent["milestone"]:
         bad(f"milestone '{item['milestone']}' khác parent '{parent['milestone']}'", ("milestone", parent["milestone"]))
     return out
