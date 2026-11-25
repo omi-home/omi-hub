@@ -50,6 +50,9 @@ class FakeGh:
     def assign_self(self, cfg, n):
         self.assigned.append(n)
 
+    def milestone_open_issues(self, cfg, title):
+        return sum(1 for i in self.issues.values() if i["milestone"] == title and i["state"] == "OPEN")
+
     def open_dependents(self, cfg, n):
         return [d for d, bs in self.blockers.items() if n in bs and self.issues[d]["state"] == "OPEN"]
 
@@ -164,6 +167,19 @@ class TestFlow(unittest.TestCase):
         self.assertIn("hết blocker (#3", self.g.notes[4][-1])
         with self.assertRaisesRegex(RuleError, "blocked-by đang mở"):
             items.move(CFG, WF, 5, "Ready")
+
+    def test_milestone_ready_printed_once_when_last_issue_closes(self):
+        self.g.add(1, "Epic", "In Progress")
+        self.g.add(2, "Change Request", "In Progress", parent=1)
+        self.g.add(3, "Task", "In QA", parent=2, prs=MERGED)
+        self.g.add(4, "Task", "In QA", parent=2, prs=MERGED)
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            items.move(CFG, WF, 3, "Done")
+        self.assertNotIn("MILESTONE", out.getvalue())
+        with contextlib.redirect_stdout(out):
+            items.move(CFG, WF, 4, "Done")  # rollup đóng CR rồi Epic → milestone hết issue mở
+        self.assertEqual(out.getvalue().count("MILESTONE v1 sẵn sàng release"), 1)
 
 
 class TestViews(unittest.TestCase):
