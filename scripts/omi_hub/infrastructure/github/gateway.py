@@ -8,7 +8,7 @@ from .issues import (AUDIT_TITLE, add_blocked_by, add_sub_issue, assign_self, cl
 from .milestones import ensure_milestone, set_milestone
 from .pulls import (create_pr, develop, issue_branches, merge_pr, open_pr_for_branch, pr_checks, pr_diff,
                     pr_view)
-from .release import (compare_commits, ensure_branch, ensure_codeowners, ensure_ruleset, pr_reviews,
+from .release import (branch_exists, compare_commits, ensure_branch, ensure_codeowners, ensure_ruleset, pr_reviews,
                       set_default_branch)
 from .project import add_to_project, clear_field, find_item, project_items, set_field
 
@@ -18,5 +18,5 @@ __all__ = ["copy_project", "create_project", "ensure_fields", "ensure_issue_type
            "existing_keys", "issue_db_id", "issue_snapshot", "repo_issues", "upsert_audit_issue",
            "ensure_milestone", "set_milestone", "add_to_project", "clear_field", "find_item", "project_items",
            "set_field", "create_pr", "develop", "issue_branches", "merge_pr", "open_pr_for_branch", "pr_checks", "pr_diff", "pr_view",
-           "compare_commits", "ensure_branch", "ensure_codeowners", "ensure_ruleset", "pr_reviews",
+           "branch_exists", "compare_commits", "ensure_branch", "ensure_codeowners", "ensure_ruleset", "pr_reviews",
            "set_default_branch"]
