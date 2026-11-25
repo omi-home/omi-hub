@@ -37,6 +37,8 @@ def render_status(wf, items, milestone=None):
     section("Đang làm:", [f"- #{i['number']} {i['title']} — {i['status']}" for i in live if i["status"] in ACTIVE])
     section("Blocked:", [f"- #{i['number']} {i['title']} — {i['blocked_reason'] or 'blocked-by'}"
                          for i in live if i["status"] == "Blocked"])
+    section("Waiting:", [f"- #{i['number']} {i['title']} — chờ " + ", ".join(f"#{b}" for b in i.get("blockers", []))
+                         for i in live if i["status"] == "Waiting"])
     section("Rework:", [f"- #{i['number']} {i['title']} — {i['rework_count']} lần"
                         for i in live if i.get("rework_count")])
     nxt = pick_next(wf, items)

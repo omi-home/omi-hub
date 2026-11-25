@@ -27,6 +27,12 @@ class TestStatusResume(unittest.TestCase):
         self.assertIn("Tiếp theo: #6", out)
         self.assertIn("STATUS v2: 0/0", render_status(WF, items, "v2"))
 
+    def test_ac105_2_status_lists_waiting(self):
+        items = [pitem(1, "Task", "Waiting", blockers=[3, 4], open_blockers=2), pitem(2, "Task", "Ready")]
+        out = render_status(WF, items)
+        self.assertIn("Waiting:\n- #1 [Task] item 1 — chờ #3, #4", out)
+        self.assertNotIn("#2 [Task] item 2 — chờ", out)
+
     def test_resume_step(self):
         rs = resume_step
         self.assertEqual(rs("In Progress", True, 0, False, False)[0], "code")
