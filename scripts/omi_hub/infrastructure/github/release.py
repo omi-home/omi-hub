@@ -109,3 +109,7 @@ def compare_commits(cfg, base, head):
 def pr_reviews(cfg, pr):
     out = client.run(["pr", "view", str(pr), "-R", client.repo_full(cfg), "--json", "reviews"])
     return [{"author": r["author"]["login"], "state": r["state"]} for r in json.loads(out)["reviews"]]
+
+
+def has_ruleset(cfg):
+    return any(r["name"] == RULESET for r in client.rest("GET", f"{client.repo_path(cfg)}/rulesets") or [])

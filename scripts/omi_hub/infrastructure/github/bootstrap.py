@@ -1,4 +1,5 @@
 """Khởi tạo: Issue Types, Project, fields, label, variable."""
+import base64
 import json
 
 from . import client, project
@@ -119,3 +120,16 @@ def ensure_views(project_id, views):
             client.graphql(FILTER_VIEW, v=vid, filter=v["filter"])
         made.append(v["name"])
     return made
+
+
+def remote_json(repo_full, path):
+    """Đọc file JSON trên nhánh mặc định của repo khác (vd. plugin.json của hub)."""
+    return json.loads(base64.b64decode(client.rest("GET", f"repos/{repo_full}/contents/{path}")["content"]))
+
+
+def get_variable(cfg, name):
+    return client.run(["variable", "get", name, "-R", client.repo_full(cfg)]).strip()
+
+
+def secret_names(cfg):
+    return {s["name"] for s in json.loads(client.run(["secret", "list", "-R", client.repo_full(cfg), "--json", "name"]))}
