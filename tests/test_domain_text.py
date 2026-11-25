@@ -28,5 +28,22 @@ class TestText(unittest.TestCase):
         self.assertEqual(text.merge_agents_md(old, sec), f"# Dự án\n\n{sec}\n\n## Khác\n")
 
 
+
+
+class TestDocRefs(unittest.TestCase):
+    def test_section_stops_at_same_level_and_ignores_fenced_headings(self):
+        from omi_hub.domain import docs
+        md = "# A\n## Outbox pattern\nx\n```\n# không phải heading\n```\n### Con\ny\n## Khác\nz"
+        self.assertEqual(docs.section(md, "outbox-pattern"),
+                         "## Outbox pattern\nx\n```\n# không phải heading\n```\n### Con\ny")
+        self.assertIsNone(docs.section(md, "nope"))
+        self.assertEqual(docs.slug("Mục 3.4: Views (mẫu)"), "mục-34-views-mẫu")
+
+    def test_doc_refs_only_in_section_deduped(self):
+        from omi_hub.domain import docs
+        body = "docs/truoc.md#x\n### Tham chiếu\n- docs/a.md#b\n- docs/a.md#b\n- docs/c.md\n### Khác\ndocs/x.md"
+        self.assertEqual(docs.doc_refs(body), [("docs/a.md", "b"), ("docs/c.md", None)])
+
+
 if __name__ == "__main__":
     unittest.main()

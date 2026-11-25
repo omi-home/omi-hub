@@ -13,7 +13,8 @@
     "sections": [
       {"heading": "Story", "required": true, "default": "Là <vai trò>, tôi muốn <hành động> để <giá trị>.", "pattern": "^Là .+, tôi muốn .+ để .+"},
       {"heading": "Acceptance criteria", "required": true, "default": "- [ ] ", "checklist": true, "hint": "Mỗi dòng kiểm chứng được bằng test; không tự động được thì ghi [manual]"},
-      {"heading": "Ghi chú", "required": false}
+      {"heading": "Ghi chú", "required": false},
+      {"heading": "Tham chiếu", "required": false, "hint": "Mỗi dòng một docs/<file>.md#<mục>; context ghép đúng mục đó, không chép tài liệu vào đây"}
     ]
   },
   "Functional Requirement": {
@@ -21,7 +22,8 @@
     "sections": [
       {"heading": "Mô tả", "required": true, "hint": "Đầu vào → xử lý → đầu ra"},
       {"heading": "Acceptance criteria", "required": true, "default": "- [ ] ", "checklist": true, "hint": "Mỗi dòng kiểm chứng được bằng test; không tự động được thì ghi [manual]"},
-      {"heading": "Ràng buộc", "required": false}
+      {"heading": "Ràng buộc", "required": false},
+      {"heading": "Tham chiếu", "required": false, "hint": "Mỗi dòng một docs/<file>.md#<mục>; context ghép đúng mục đó, không chép tài liệu vào đây"}
     ]
   },
   "Non-Functional Requirement": {
@@ -30,7 +32,8 @@
       {"heading": "Nhóm", "required": true, "options": ["Performance", "Security", "Reliability", "Usability", "Maintainability", "Compliance"]},
       {"heading": "Chỉ số và ngưỡng", "required": true, "hint": "Ví dụ: p95 < 300ms ở 100 RPS"},
       {"heading": "Cách đo", "required": true, "hint": "Công cụ/lệnh đo và môi trường"},
-      {"heading": "Acceptance criteria", "required": true, "default": "- [ ] ", "checklist": true, "hint": "Mỗi dòng kiểm chứng được bằng test; không tự động được thì ghi [manual]"}
+      {"heading": "Acceptance criteria", "required": true, "default": "- [ ] ", "checklist": true, "hint": "Mỗi dòng kiểm chứng được bằng test; không tự động được thì ghi [manual]"},
+      {"heading": "Tham chiếu", "required": false, "hint": "Mỗi dòng một docs/<file>.md#<mục>; context ghép đúng mục đó, không chép tài liệu vào đây"}
     ]
   },
   "Change Request": {
@@ -39,7 +42,8 @@
       {"heading": "Lý do thay đổi", "required": true},
       {"heading": "Nội dung thay đổi", "required": true, "hint": "Trước → sau"},
       {"heading": "Affects", "required": true, "hint": "Item bị ảnh hưởng, ví dụ: #12 #15", "pattern": "#\\d+"},
-      {"heading": "Ảnh hưởng dự kiến", "required": false}
+      {"heading": "Ảnh hưởng dự kiến", "required": false},
+      {"heading": "Tham chiếu", "required": false, "hint": "Mỗi dòng một docs/<file>.md#<mục>; context ghép đúng mục đó, không chép tài liệu vào đây"}
     ]
   },
   "Task": {
@@ -47,7 +51,8 @@
     "sections": [
       {"heading": "Việc cần làm", "required": true},
       {"heading": "Definition of done", "required": true, "default": "- [ ] Test pass\n- [ ] PR merged", "checklist": true, "placeholder": false},
-      {"heading": "Ghi chú kỹ thuật", "required": false}
+      {"heading": "Ghi chú kỹ thuật", "required": false},
+      {"heading": "Tham chiếu", "required": false, "hint": "Mỗi dòng một docs/<file>.md#<mục>; context ghép đúng mục đó, không chép tài liệu vào đây"}
     ]
   },
   "Bug": {
@@ -57,7 +62,8 @@
       {"heading": "Môi trường", "required": false, "hint": "Phiên bản, OS, trình duyệt"},
       {"heading": "Các bước tái hiện", "required": true, "default": "1. "},
       {"heading": "Kết quả mong đợi", "required": true},
-      {"heading": "Kết quả thực tế", "required": true}
+      {"heading": "Kết quả thực tế", "required": true},
+      {"heading": "Tham chiếu", "required": false, "hint": "Mỗi dòng một docs/<file>.md#<mục>; context ghép đúng mục đó, không chép tài liệu vào đây"}
     ]
   }
 }

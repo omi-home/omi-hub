@@ -10,6 +10,7 @@ description: Phân rã PRD thành plan JSON omi (Epic → Story/Functional Requi
    - Epic: capability lớn. Story: giá trị cho một vai trò. Functional Requirement: hành vi hệ thống. Non-Functional Requirement: chất lượng đo được (có ngưỡng). Task: ≤ 1 ngày, luôn dưới Story/Functional Requirement/Non-Functional Requirement. Không có Change Request.
    - Story/Functional Requirement/Non-Functional Requirement có `### Acceptance criteria` dạng `- [ ]`, mỗi dòng kiểm chứng được bằng test; không tự động hóa được thì ghi `[manual]`.
    - Title và body mỗi node theo template của loại (`OMI_CLI template <type>`, mục `### ...` đúng tên).
+   - Tài liệu kỹ thuật dùng chung (kiến trúc, quy ước, mô hình dữ liệu) ở `docs/` của repo: không chép vào body; ghi mục `### Tham chiếu` mỗi dòng một `docs/<file>.md#<anchor heading>` đúng phần node cần. `context` tự ghép đúng các mục đó (của Task và parent) cho agent.
    - Key phân cấp ổn định (`E001.S002.T003`). Key duy nhất trong cả repo: plan mới dùng số Epic chưa có (apply báo lỗi nếu key đã thuộc issue khác title). Gắn vào issue có sẵn: `"parent": <số>` ở node gốc. Milestone chỉ ở `plan.milestone` hoặc node gốc không có `parent` (con kế thừa); mỗi milestone khác nhau là một Epic gốc riêng; apply tự tạo milestone chưa có.
    - Phụ thuộc: `"blocked_by": ["<key>", <số issue>]` chỉ ở Task phải chờ (key trong plan này hoặc đã có trong repo, kể cả plan milestone trước). Story B phụ thuộc Story A → khai báo ở các Task của B. Chỉ khai báo thứ tự thực sự; `next` bỏ qua Task còn blocker mở; vòng lặp bị báo lỗi.
 

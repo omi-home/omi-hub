@@ -7,6 +7,7 @@ from omi_hub.application import items
 from omi_hub.application.workspace import repo_dir, tmp_dir
 from omi_hub.config import load_pr_template, load_templates
 from omi_hub.domain.acceptance import accept_verdict, parse_ac
+from omi_hub.domain.docs import doc_refs, render_refs, section
 from omi_hub.domain.errors import RuleError
 from omi_hub.domain.planning import AC_TYPES, pick_next, validate_plan
 from omi_hub.domain.progress import resume_step
@@ -34,10 +35,30 @@ def _wait_linked(cfg, n):
     raise RuleError(f"GitHub chưa liên kết PR vào #{n} sau {sum(LINK_WAIT)}s — chạy lại `submit {n}` (không tạo PR trùng)")
 
 
+def doc_context(cfg, bodies):
+    """Ghép các mục docs được tham chiếu trong `### Tham chiếu` của task/parent; tham chiếu hỏng → cảnh báo."""
+    root = Path(repo_dir(cfg)).resolve()
+    refs = []
+    for b in bodies:
+        refs += [r for r in doc_refs(b) if r not in refs]
+    found, missing = [], []
+    for path, anchor in refs:
+        label = path + (f"#{anchor}" if anchor else "")
+        f = (root / path).resolve()
+        text = None
+        if f.is_relative_to(root) and f.is_file():  # không đọc file ngoài repo
+            md = f.read_text(encoding="utf-8")
+            text = section(md, anchor) if anchor else md.strip()
+        (found.append((label, text)) if text else missing.append(label))
+    return render_refs(found, missing)
+
+
 def context(cfg, n):
     s = gh.issue_snapshot(cfg, n)
     parent = gh.issue_snapshot(cfg, s["parent"]["number"]) if s["parent"] else None
     text = render_context(s, parent, [gh.issue_snapshot(cfg, a) for a in affected(s["body"])])
+    docs = doc_context(cfg, [s["body"]] + ([parent["body"]] if parent else []))
+    text += f"\n\n{docs}" if docs else ""
     print(text)
     return text
 
