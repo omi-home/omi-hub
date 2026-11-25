@@ -15,7 +15,7 @@ class FakeGh:
     def __init__(self, default="main", ruleset_err=None):
         self.calls, self.default, self.ruleset_err = [], default, ruleset_err
         self.open_pr, self.commits, self.reviews, self.auto_fails = None, ["feat: a (#1)"], [], False
-        self.branches, self.locked = {"main", "develop"}, set()
+        self.branches, self.locked, self.codeowners_err = {"main", "develop"}, set(), None
 
     def branch_exists(self, cfg, name):
         return name in self.branches
@@ -23,6 +23,8 @@ class FakeGh:
     def ensure_codeowners(self, cfg, branch, po):
         if branch in self.locked:  # ruleset chặn push thẳng
             raise self.GhError("Repository rule violations found")
+        if self.codeowners_err:
+            raise self.GhError(self.codeowners_err)
         self.calls.append(("ensure_codeowners", (branch, po), {}))
 
     def default_branch(self, owner, repo):
@@ -81,6 +83,7 @@ class TestReleaseFlow(unittest.TestCase):
         g.locked = {"main"}
         cfg, warns = self.run_flow(g, {"main_branch": "main"})
         self.assertIn(("ensure_codeowners", ("develop", "boss"), {}), g.calls)
+        self.assertNotIn(("ensure_codeowners", ("main", "boss"), {}), g.calls)
         self.assertEqual(len(warns), 1)
         self.assertEqual(cfg["po"], "boss")
 
@@ -91,6 +94,14 @@ class TestReleaseFlow(unittest.TestCase):
     def test_ac70_2_rerun_keeps_main_branch(self):
         cfg, _ = self.run_flow(FakeGh(default="develop"), {"main_branch": "master"})
         self.assertEqual(cfg["main_branch"], "master")
+
+    def test_ac70_1_other_codeowners_error_not_hidden(self):
+        g = FakeGh()
+        g.codeowners_err = "HTTP 403: Resource not accessible by integration"
+        with self.assertRaises(Exception) as ctx:
+            self.run_flow(g)
+        self.assertIn("403", str(ctx.exception))
+        self.assertEqual(g.calls, [])  # không rẽ sang develop
 
     def test_ac70_2_lost_config_finds_master(self):
         g = FakeGh(default="develop")

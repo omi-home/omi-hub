@@ -56,7 +56,9 @@ def release_flow(cfg, po, old):
     main, warns = main_branch(cfg, old), []
     try:
         gh.ensure_codeowners(cfg, main, po)  # trước ruleset: sau đó nhánh chính không nhận push thẳng
-    except gh.GhError:  # đổi PO khi ruleset đã có: đi qua develop, PO cũ duyệt release kế tiếp
+    except gh.GhError as e:  # đổi PO khi ruleset đã có: đi qua develop, PO cũ duyệt release kế tiếp
+        if "rule violation" not in str(e).lower():
+            raise  # thiếu quyền, mạng...: không che lỗi thật
         gh.ensure_branch(cfg, DEVELOP, main)
         gh.ensure_codeowners(cfg, DEVELOP, po)
         warns.append(f"CODEOWNERS @{po} ghi lên {DEVELOP}; lên {main} ở release kế tiếp (PO cũ approve)")
