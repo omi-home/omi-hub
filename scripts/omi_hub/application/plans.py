@@ -18,6 +18,8 @@ def apply(cfg, wf, plan_path, approve=False):
     if errs:
         raise RuleError(errs)
     keys = dict(gh.existing_keys(cfg))
+    for m in {n.get("milestone") or plan.get("milestone") for n in plan["items"] if "parent" not in n} - {None}:
+        gh.ensure_milestone(cfg, m)  # node con kế thừa milestone parent, chỉ node gốc cần
 
     def create(node, parent):
         n = keys.get(node["key"])
