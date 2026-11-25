@@ -3,7 +3,9 @@ import json
 from pathlib import Path
 
 from omi_hub.config import load_pr_template, load_templates
+from omi_hub.application.release import sync_po_team
 from omi_hub.domain.errors import RuleError
+from omi_hub.domain.release import po_team
 from omi_hub.domain.security import DEFAULT_SECURITY
 from omi_hub.domain.forms import form_filename, render_form, render_pr_template
 from omi_hub.domain.text import merge_agents_md
@@ -50,21 +52,22 @@ def main_branch(cfg, old):
     return found
 
 
-def release_flow(cfg, po, old):
+def release_flow(cfg, old):
     """develop = default branch (PR task, Closes #n giữ nguyên); nhánh chính chỉ nhận PR release có PO duyệt.
     Trả danh sách cảnh báo."""
-    main, warns = main_branch(cfg, old), []
+    main, warns, team = main_branch(cfg, old), [], po_team(cfg["owner"])
+    sync_po_team(cfg)
     try:
-        gh.ensure_codeowners(cfg, main, po)  # trước ruleset: sau đó nhánh chính không nhận push thẳng
+        gh.ensure_codeowners(cfg, main, team)  # trước ruleset: sau đó nhánh chính không nhận push thẳng
     except gh.GhError as e:  # đổi PO khi ruleset đã có: đi qua develop, PO cũ duyệt release kế tiếp
         if "rule violation" not in str(e).lower():
             raise  # thiếu quyền, mạng...: không che lỗi thật
         gh.ensure_branch(cfg, DEVELOP, main)
-        gh.ensure_codeowners(cfg, DEVELOP, po)
-        warns.append(f"CODEOWNERS @{po} ghi lên {DEVELOP}; lên {main} ở release kế tiếp (PO cũ approve)")
+        gh.ensure_codeowners(cfg, DEVELOP, team)
+        warns.append(f"CODEOWNERS @{team} ghi lên {DEVELOP}; lên {main} ở release kế tiếp")
     gh.ensure_branch(cfg, DEVELOP, main)
     gh.set_default_branch(cfg, DEVELOP)
-    cfg.update(default_branch=DEVELOP, main_branch=main, po=po)
+    cfg.update(default_branch=DEVELOP, main_branch=main)
     err = gh.ensure_ruleset(cfg, main)
     if err:
         warns.append(f"Không tạo được ruleset cho {main} ({err}). Repo private gói Free không có ruleset:"
@@ -73,12 +76,9 @@ def release_flow(cfg, po, old):
 
 
 def init(wf, milestone=None, from_template=None, template_only=False, hub_repo="omi-home/omi-hub",
-             test_cmd=None, lint_cmd=None, accept_cmd=None, repo_dir_=".", po=None):
+             test_cmd=None, lint_cmd=None, accept_cmd=None, repo_dir_="."):
     """Chạy từ thư mục workspace; repo_dir_ = đường dẫn repo git tương đối với workspace."""
     old = json.loads(CONFIG.read_text(encoding="utf-8")) if CONFIG.exists() else {}
-    po = po or old.get("po")
-    if not template_only and not po:
-        raise RuleError("Thiếu --po <login GitHub của PO> (người approve PR release develop→main)")
     owner, repo = gh.current_repo(cwd=repo_dir_)
     gh.ensure_issue_types(owner, list(wf["types"]))
     title = "OMI Template" if template_only else f"{repo} — omi"
@@ -96,7 +96,7 @@ def init(wf, milestone=None, from_template=None, template_only=False, hub_repo="
            "commands": {**old.get("commands", {}), **{k: v for k, v in new_cmds.items() if v}},
            "security_paths": old.get("security_paths", DEFAULT_SECURITY),
            "review_max_diff_lines": old.get("review_max_diff_lines", 1500)}
-    warns = release_flow(cfg, po, old)
+    warns = release_flow(cfg, old)
     CONFIG.parent.mkdir(exist_ok=True)
     CONFIG.write_text(json.dumps(cfg, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     write_templates(hub_repo, Path(repo_dir_), Path("."))
