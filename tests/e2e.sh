@@ -23,10 +23,10 @@ cat > /tmp/omi-e2e-plan.json <<EOF
 {"milestone": "e2e", "items": [
   {"key": "$K", "type": "Epic", "title": "Kiểm thử e2e omi $RUN",
    "body": "### Mục tiêu\nXác nhận pipeline omi\n\n### Phạm vi\n- một story, một task", "children": [
-    {"key": "$K.S001", "type": "User Story", "title": "Dev có thể chạy e2e $RUN",
-     "body": "### Story\nLà dev, tôi muốn chạy e2e để kiểm tra omi.\n\n### Acceptance criteria\n- [ ] file e2e-$RUN.txt tồn tại",
+    {"key": "$K.F001", "type": "Functional Requirement", "title": "Dev có thể chạy e2e $RUN",
+     "body": "### Mô tả\nChạy e2e tạo file\n\n### Story\nLà dev, tôi muốn chạy e2e để kiểm tra omi.\n\n### Acceptance criteria\n- [ ] file e2e-$RUN.txt tồn tại",
      "children": [
-      {"key": "$K.S001.T001", "type": "Task", "title": "Tạo file e2e-$RUN.txt",
+      {"key": "$K.F001.T001", "type": "Task", "title": "Tạo file e2e-$RUN.txt",
        "body": "### Việc cần làm\nTạo e2e-$RUN.txt\n\n### Definition of done\n- [ ] Test pass"}]}]}]}
 EOF
 $OMI plan-show /tmp/omi-e2e-plan.json

@@ -137,6 +137,10 @@ class TestFlow(unittest.TestCase):
         with self.assertRaisesRegex(RuleError, "--reason"):
             items.block(CFG, WF, 3)
 
+    def test_new_user_story_rejected(self):
+        with self.assertRaisesRegex(RuleError, "không còn tạo mới"):
+            items.new_item(CFG, WF, "User Story", "Khách có thể đặt hàng", parent=1)
+
     def test_cancel_requires_reason(self):
         self.g.add(3, "Task", "Ready")
         with self.assertRaisesRegex(RuleError, "--reason"):

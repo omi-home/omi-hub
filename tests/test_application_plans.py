@@ -13,9 +13,9 @@ class TestApply(unittest.TestCase):
     PLAN = {"milestone": "v1", "items": [
         {"key": "E001", "type": "Epic", "title": "Quản lý đơn hàng",
          "body": "### Mục tiêu\nBán hàng online\n\n### Phạm vi\n- đặt hàng", "children": [
-            {"key": "E001.S001", "type": "User Story", "title": "Khách hàng có thể đặt hàng",
-             "body": "### Story\nLà khách, tôi muốn đặt hàng để mua nhanh.\n\n### Acceptance criteria\n- [ ] a",
-             "children": [{"key": "E001.S001.T001", "type": "Task", "title": "Thêm API đặt hàng",
+            {"key": "E001.F001", "type": "Functional Requirement", "title": "Khách hàng có thể đặt hàng",
+             "body": "### Mô tả\nĐặt hàng online\n\n### Story\nLà khách, tôi muốn đặt hàng để mua nhanh.\n\n### Acceptance criteria\n- [ ] a",
+             "children": [{"key": "E001.F001.T001", "type": "Task", "title": "Thêm API đặt hàng",
                            "body": "### Việc cần làm\nPOST /orders\n\n### Definition of done\n- [ ] Test pass"}]}]}]}
 
     def run_apply(self, existing, approve):
@@ -38,13 +38,13 @@ class TestApply(unittest.TestCase):
     def test_creates_parent_first_with_approved_statuses(self):
         calls, keys = self.run_apply({}, approve=True)
         self.assertEqual(calls, [("Epic", None, "Approved", "E001", "v1"),
-                                 ("User Story", 101, "Approved", "E001.S001", None),
-                                 ("Task", 102, "Ready", "E001.S001.T001", None)])
-        self.assertEqual(keys, {"E001": 101, "E001.S001": 102, "E001.S001.T001": 103})
+                                 ("Functional Requirement", 101, "Approved", "E001.F001", None),
+                                 ("Task", 102, "Ready", "E001.F001.T001", None)])
+        self.assertEqual(keys, {"E001": 101, "E001.F001": 102, "E001.F001.T001": 103})
 
     def test_idempotent_and_draft_without_approve(self):
         calls, keys = self.run_apply({"E001": {"number": 7, "title": "[Epic] Quản lý đơn hàng"}}, approve=False)
-        self.assertEqual(calls, [("User Story", 7, None, "E001.S001", None), ("Task", 101, None, "E001.S001.T001", None)])
+        self.assertEqual(calls, [("Functional Requirement", 7, None, "E001.F001", None), ("Task", 101, None, "E001.F001.T001", None)])
         self.assertEqual(keys["E001"], 7)
 
     def test_key_of_other_issue_rejected_before_creating(self):
@@ -54,9 +54,9 @@ class TestApply(unittest.TestCase):
     def test_blocked_by_links_missing_only(self):
         plan = json.loads(json.dumps(self.PLAN))
         story = plan["items"][0]["children"][0]
-        story["children"].append({"key": "E001.S001.T002", "type": "Task", "title": "Thêm UI đặt hàng",
+        story["children"].append({"key": "E001.F001.T002", "type": "Task", "title": "Thêm UI đặt hàng",
                                   "body": "### Việc cần làm\nForm\n\n### Definition of done\n- [ ] Test pass",
-                                  "blocked_by": ["E001.S001.T001", 50, "E000.T009"]})
+                                  "blocked_by": ["E001.F001.T001", 50, "E000.T009"]})
         with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as f:
             json.dump(plan, f)
         existing = {"E001": {"number": 7, "title": "[Epic] Quản lý đơn hàng"},
@@ -76,6 +76,23 @@ class TestApply(unittest.TestCase):
         with mock.patch.object(plans.gh, "existing_keys", return_value=existing), \
                 self.assertRaisesRegex(RuleError, "E404"):
             plans.apply({}, WF, f.name)
+        Path(f.name).unlink()
+
+    def test_new_user_story_rejected_existing_kept(self):
+        plan = json.loads(json.dumps(self.PLAN))
+        plan["items"][0]["children"].append({"key": "E001.S002", "type": "User Story", "title": "Khách có thể hủy đơn",
+                                             "body": "### Story\nLà khách, tôi muốn hủy để đổi ý.\n\n### Acceptance criteria\n- [ ] a"})
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as f:
+            json.dump(plan, f)
+        with mock.patch.object(plans.gh, "existing_keys", return_value={}), \
+                self.assertRaisesRegex(RuleError, "E001.S002: User Story không còn tạo mới"):
+            plans.apply({}, WF, f.name)
+        existing = {"E001.S002": {"number": 9, "title": "[User Story] Khách có thể hủy đơn"}}
+        with mock.patch.object(items, "new_item", side_effect=[1, 2, 3]) as new, \
+                mock.patch.object(plans.gh, "existing_keys", return_value=existing), \
+                mock.patch.object(plans.gh, "ensure_milestone"):
+            keys = plans.apply({}, WF, f.name)
+        self.assertEqual((keys["E001.S002"], new.call_count), (9, 3))  # US cũ bỏ qua, không tạo lại
         Path(f.name).unlink()
 
     def test_invalid_plan_rejected(self):

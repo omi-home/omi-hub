@@ -75,7 +75,7 @@ Quy tắc giảm token cố định:
 
 ### 3.1 Work Item Types (Issue Types của org)
 
-`Epic`, `User Story`, `Functional Requirement`, `Non-Functional Requirement`, `Change Request`, `Task`, `Bug`. Bootstrap tạo loại còn thiếu, giữ nguyên các loại org đã có (`Feature` mặc định của GitHub không dùng; không xóa).
+`Epic`, `User Story` (legacy), `Functional Requirement`, `Non-Functional Requirement`, `Change Request`, `Task`, `Bug`. **User Story là loại legacy** (CR #116): issue đã có vẫn hợp lệ với audit, rollup, accept, tree, status và vẫn làm parent được; `new`/`apply` không tạo mới, `init` không sinh issue form. Yêu cầu từ góc nhìn vai trò viết thành Functional Requirement có mục `### Story`. Bootstrap tạo loại còn thiếu, giữ nguyên các loại org đã có (`Feature` mặc định của GitHub không dùng; không xóa).
 
 Không dùng label để phân loại. Label chỉ dành cho mục đích phụ (area, tech) nếu dự án muốn.
 
@@ -84,7 +84,7 @@ Không dùng label để phân loại. Label chỉ dành cho mục đích phụ 
 | Loại | Vai trò | Parent (sub-issue) hợp lệ | Ràng buộc |
 |---|---|---|---|
 | Epic | Capability/feature lớn | — | Bắt buộc có Milestone |
-| User Story | Giá trị người dùng | Epic | Bắt buộc parent |
+| User Story (legacy) | Giá trị người dùng — chỉ issue cũ | Epic | Bắt buộc parent; không tạo mới |
 | Functional Requirement | Yêu cầu chức năng | Epic, User Story | Bắt buộc parent |
 | Non-Functional Requirement | Yêu cầu phi chức năng | Epic, User Story, Functional Requirement | Bắt buộc parent |
 | Change Request | Thay đổi baseline | Epic | Bắt buộc parent, ≥1 `Affects` |
@@ -134,7 +134,7 @@ Nguồn duy nhất: `scripts/omi_hub/config/templates.json`. Từ đó script **
 |---|---|---|
 | Epic | ≥ 5 ký tự · "Quản lý đơn hàng" | ★Mục tiêu · ★Phạm vi · Ngoài phạm vi · Chỉ số thành công |
 | User Story | `<vai trò> có thể <hành động>` · "Khách hàng có thể theo dõi đơn hàng" | ★Story (`Là ..., tôi muốn ... để ...`) · ★Acceptance criteria (checklist) · Ghi chú |
-| Functional Requirement | `Hệ thống phải\|cần <hành vi>` · "Hệ thống phải gửi email xác nhận đơn" | ★Mô tả · ★Acceptance criteria (checklist) · Ràng buộc |
+| Functional Requirement | `Hệ thống phải\|cần <hành vi>` hoặc `<vai trò> có thể <hành động>` · "Hệ thống phải gửi email xác nhận đơn" | ★Mô tả · Story (`Là ..., tôi muốn ... để ...`) · ★Acceptance criteria (checklist) · Ràng buộc |
 | Non-Functional Requirement | `<Nhóm>: <chỉ số> <ngưỡng>` · "Performance: p95 API đặt hàng < 300ms ở 100 RPS" | ★Nhóm (Performance/Security/Reliability/Usability/Maintainability/Compliance) · ★Chỉ số và ngưỡng · ★Cách đo · ★Acceptance criteria |
 | Change Request | `Thay đổi <đối tượng>: <tóm tắt>` · "Thay đổi thanh toán: hỗ trợ trả góp" | ★Lý do thay đổi · ★Nội dung thay đổi · ★Affects (`#n`) · Ảnh hưởng dự kiến |
 | Task | ≥ 5 ký tự, `<động từ> <đối tượng>` · "Thêm API POST /orders" | ★Việc cần làm · ★Definition of done (checklist) · Ghi chú kỹ thuật |

@@ -19,6 +19,16 @@ class TestTemplates(unittest.TestCase):
                          {"[Epic] ", "[User Story] ", "[Functional Requirement] ", "[Non-Functional Requirement] ",
                           "[Change Request] ", "[Task] ", "[Bug] "})
 
+    def test_fr_accepts_role_title_and_optional_story(self):
+        ac = "### Mô tả\nx\n\n### Acceptance criteria\n- [ ] a"
+        fr = "[Functional Requirement] "
+        self.assertEqual(templates.check_template(TPL, "Functional Requirement", fr + "Khách hàng có thể đặt hàng", ac), [])
+        story = ac + "\n\n### Story\nLà khách, tôi muốn đặt hàng để mua nhanh."
+        self.assertEqual(templates.check_template(TPL, "Functional Requirement", fr + "Hệ thống phải lưu đơn", story), [])
+        bad = templates.check_template(TPL, "Functional Requirement", fr + "Hệ thống phải lưu đơn", ac + "\n\n### Story\nmuốn X")
+        self.assertTrue(any("Story" in e for e in bad))
+        self.assertTrue(templates.check_template(TPL, "Functional Requirement", fr + "Đặt hàng", ac))
+
     def test_with_prefix_idempotent(self):
         self.assertEqual(templates.with_prefix(TPL, "Functional Requirement", "Hệ thống phải X"), "[Functional Requirement] Hệ thống phải X")
         self.assertEqual(templates.with_prefix(TPL, "Functional Requirement", "[Functional Requirement] Hệ thống phải X"),

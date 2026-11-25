@@ -25,6 +25,12 @@ def allowed_statuses(wf, type_):
     return out
 
 
+def check_creatable(wf, type_):
+    """Loại legacy (vd. User Story): issue cũ vẫn hợp lệ nhưng không tạo mới."""
+    if type_def(wf, type_).get("legacy"):
+        raise RuleError(f"{type_} không còn tạo mới — dùng Functional Requirement (mục `### Story` tùy chọn)")
+
+
 def is_terminal(wf, status):
     return status in wf["terminal"]
 

@@ -2,7 +2,7 @@
 from omi_hub.config import load_templates
 from omi_hub.domain.errors import RuleError
 from omi_hub.domain.guards import evaluate_guards
-from omi_hub.domain.lifecycle import BLOCKED, WAITING, allowed_statuses, is_terminal, transition
+from omi_hub.domain.lifecycle import BLOCKED, WAITING, allowed_statuses, check_creatable, is_terminal, transition
 from omi_hub.domain.relations import check_links, check_parent, rollup
 from omi_hub.domain.rework import rework as rework_status
 from omi_hub.domain.templates import check_template, with_prefix
@@ -68,6 +68,7 @@ def rollup_up(cfg, wf, snap, trigger):
 
 def new_item(cfg, wf, type_, title, parent=None, affects=(), milestone=None, priority=None,
             estimate=None, body="", key=None, status=None):
+    check_creatable(wf, type_)
     psnap = gh.issue_snapshot(cfg, parent) if parent else None
     check_parent(wf, type_, psnap["type"] if psnap else None)
     if milestone is None and psnap:
