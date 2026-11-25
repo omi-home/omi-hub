@@ -8,10 +8,15 @@ RULESET = "omi-release"
 
 
 def ensure_codeowners(cfg, branch, team):
-    """Ghi `.github/CODEOWNERS` = `* @org/team` (GitHub đọc CODEOWNERS từ nhánh base)."""
+    """Ghi `.github/CODEOWNERS` = `* @org/team` (GitHub đọc CODEOWNERS từ nhánh base).
+    branch=None: repo rỗng, commit đầu lên nhánh mặc định của org."""
     path, want = f"{client.repo_path(cfg)}/contents/.github/CODEOWNERS", f"* @{team}\n"
     body = {"message": f"chore: CODEOWNERS release cho @{team} (omi)", "branch": branch,
             "content": base64.b64encode(want.encode()).decode()}
+    if branch is None:
+        del body["branch"]
+        client.rest("PUT", path, body)
+        return
     try:
         cur = client.rest("GET", f"{path}?ref={branch}")
     except client.GhError:
