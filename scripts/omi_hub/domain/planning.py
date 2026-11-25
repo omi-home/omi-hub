@@ -53,6 +53,8 @@ def validate_plan(wf, plan, tpl=None):
             errs.extend(f"{k}: {e}" for e in check_template(tpl, t, title, body))
         if t == "Epic" and parent_type is None and not (node.get("milestone") or plan.get("milestone")):
             errs.append(f"{k}: Epic cần milestone (plan.milestone hoặc node.milestone)")
+        if node.get("milestone") and parent_type is not None:
+            errs.append(f"{k}: milestone chỉ đặt ở node gốc; node con kế thừa milestone của parent")
         for c in node.get("children", []):
             walk(c, t)
 
