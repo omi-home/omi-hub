@@ -189,6 +189,20 @@ class TestRelease(unittest.TestCase):
         self.assertEqual(self.run_release(g, merge=True), 0)
         self.assertEqual(g.calls, [("merge_pr", (5,), {"release": True, "auto": False})])
 
+    def test_ac70_4_merge_blocked_by_owner_changes_requested(self):
+        g = FakeGh()
+        g.open_pr = 5
+        g.reviews = [{"author": "boss", "state": "APPROVED"}, {"author": "chief", "state": "CHANGES_REQUESTED"}]
+        self.assertEqual(self.run_release(g, merge=True), 1)
+        self.assertEqual(g.calls, [])
+
+    def test_ac70_4_merge_reads_owners_without_team_sync(self):
+        g = FakeGh()
+        g.open_pr = 5
+        g.reviews = [{"author": "boss", "state": "APPROVED"}]
+        self.assertEqual(self.run_release(g, merge=True), 0)
+        self.assertEqual(g.team_calls, [])  # --merge chỉ cần quyền đọc org
+
     def test_ac70_4_latest_po_verdict_wins(self):
         approve, reject = {"author": "boss", "state": "APPROVED"}, {"author": "boss", "state": "CHANGES_REQUESTED"}
         comment = {"author": "boss", "state": "COMMENTED"}
