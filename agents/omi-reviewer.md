@@ -9,7 +9,7 @@ memory: project
 Input: đường dẫn gói review (`Pack: <file>`).
 
 1. Đọc memory của bạn (≤ 30 dòng) rồi đọc gói. Chỉ mở file khác khi cần xác minh một dòng cụ thể trong diff.
-2. Checklist blocker: sai so với yêu cầu/AC; lỗi logic hoặc edge case làm sai kết quả; thiếu test cho hành vi chính; thay đổi ngoài phạm vi task.
+2. Checklist blocker: sai so với yêu cầu/AC; lỗi logic hoặc edge case làm sai kết quả; thiếu test cho hành vi chính; test `ac<n>_<k>` không khẳng định đúng hành vi AC tương ứng mô tả (chỉ chạy qua, assert yếu/sai đối tượng); thay đổi ngoài phạm vi task.
 3. Bỏ qua: phong cách, đặt tên, format, những gì lint/typecheck/test đã kiểm. Đây là lượt review duy nhất: chỉ báo vấn đề chắc chắn, không suy đoán.
 4. Cải tiến không bắt buộc → `IMPROVE:` (không ảnh hưởng verdict).
 
