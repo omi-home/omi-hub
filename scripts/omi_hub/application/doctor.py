@@ -30,8 +30,8 @@ def _lf(p):
 
 
 def hub_repo(settings):
-    markets = settings.get("extraKnownMarketplaces", {})
-    return next((m["source"]["repo"] for m in markets.values() if m.get("source", {}).get("repo")), "omi-home/omi-hub")
+    name = json.loads((PLUGIN_JSON.parent / "marketplace.json").read_text(encoding="utf-8"))["name"]
+    return settings.get("extraKnownMarketplaces", {}).get(name, {}).get("source", {}).get("repo", "omi-home/omi-hub")
 
 
 def check_version(hub):
