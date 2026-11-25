@@ -126,9 +126,10 @@ class TestIssueOps(unittest.TestCase):
     CFG = {"owner": "o", "repo": "r"}
 
     def test_existing_keys(self):
-        out = json.dumps([{"number": 3, "body": "x\n<!-- omi:key=E001.S001 -->"}, {"number": 4, "body": None}])
+        out = json.dumps([{"number": 3, "title": "S", "body": "x\n<!-- omi:key=E001.S001 -->"},
+                          {"number": 4, "title": "T", "body": None}])
         with mock.patch.object(client, "run", return_value=out):
-            self.assertEqual(issues.existing_keys(self.CFG), {"E001.S001": 3})
+            self.assertEqual(issues.existing_keys(self.CFG), {"E001.S001": {"number": 3, "title": "S"}})
 
     def test_upsert_audit_issue(self):
         open_audit = [{"number": 8, "title": issues.AUDIT_TITLE, "state": "OPEN"}]
