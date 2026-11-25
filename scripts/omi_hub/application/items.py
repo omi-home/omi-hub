@@ -101,7 +101,7 @@ def move(cfg, wf, n, target, reason=None):
         if is_terminal(wf, target):
             release_dependents(cfg, wf, n)
         rollup_up(cfg, wf, snap, target)
-        return
+        return target
     if (target == "Ready" and snap["open_blockers"] and snap["status"] != WAITING
             and WAITING in allowed_statuses(wf, snap["type"])):
         print(f"#{n} còn {snap['open_blockers']} blocker mở → {WAITING} thay vì Ready")
@@ -118,6 +118,7 @@ def move(cfg, wf, n, target, reason=None):
         gh.assign_self(cfg, n)
     apply_status(cfg, wf, snap, target, reason)
     rollup_up(cfg, wf, snap, target)
+    return target  # có thể khác target yêu cầu (Ready → Waiting khi còn blocker mở)
 
 
 def rework(cfg, wf, n, reason):

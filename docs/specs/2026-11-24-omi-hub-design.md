@@ -102,7 +102,7 @@ Cơ chế GitHub dùng:
 
 | Trường | Kiểu | Ghi chú |
 |---|---|---|
-| Status | single-select (gốc) | 10 giá trị, mục 4 |
+| Status | single-select (gốc) | 11 giá trị, mục 4 |
 | Type | gốc (issue type) | Không tạo trường trùng (spike xác nhận, xem 9) |
 | Priority | single-select | P0, P1, P2, P3 |
 | Estimate | number | Story point hoặc giờ, tùy dự án |
@@ -116,7 +116,7 @@ Cơ chế GitHub dùng:
 2. **Hierarchy** — table, group theo Parent issue, hiển thị Sub-issues progress.
 3. **Requirements** — filter `type:"User Story","Functional Requirement","Non-Functional Requirement","Change Request"`.
 4. **Delivery** — table filter `type:Task,Bug`, group theo Milestone, sort Priority.
-5. **Blocked & Rework** — filter `status:Blocked` hoặc `Rework Count:>0`.
+5. **Blocked & Rework** — filter `status:Blocked` (filter Project không OR được giữa hai field; sort theo Rework Count chỉnh tay).
 
 ### 3.5 Metadata do plugin ghi trong body/comment
 
@@ -290,16 +290,16 @@ omi-hub/
     omi.py                # entrypoint mỏng → omi_hub.cli
     omi_hub/              # clean architecture, phụ thuộc chỉ đi vào trong
       config/             # workflow.json, templates.json, pr_template.json + hàm nạp
-      domain/             # thuần: errors, lifecycle, rework, relations, guards, audit, planning, text
+      domain/             # thuần: errors, lifecycle, rework, relations, guards, audit, planning, progress, render, templates, acceptance, security, text
       infrastructure/     # github/: subprocess gh api graphql / REST
       application/        # use case theo nhóm lệnh
       cli/                # argparse + in output
   templates/
     AGENTS.md
-    ISSUE_TEMPLATE/{epic,user-story,fr,nfr,cr,task,bug}.yml
+    ISSUE_TEMPLATE/config.yml   # forms <type>.yml do init sinh từ templates.json
     workflows/omi-audit.yml
   tests/
-    test_domain_*.py, test_infrastructure_gh.py, test_cli*.py, test_guard.py
+    test_domain_*.py, test_application_*.py, test_infrastructure_github.py, test_guard.py, test_doctor.py, test_release.py
     e2e.sh
   docs/
 ```
@@ -324,14 +324,17 @@ Ranh giới:
     "Task": {
       "initial": "Draft",
       "parents": ["User Story","Functional Requirement","Non-Functional Requirement","Change Request"],
-      "requires": [],
+      "requires": ["parent"],
       "transitions": [
-        {"from": "Draft", "to": "Ready", "guards": ["parent_ready"]},
+        {"from": "Draft", "to": "Ready", "guards": ["parent_ready", "no_open_blockers"]},
+        {"from": "Draft", "to": "Waiting", "guards": ["parent_ready", "has_open_blockers"]},
+        {"from": "Ready", "to": "Waiting", "guards": ["has_open_blockers"]},
+        {"from": "Waiting", "to": "Ready", "guards": ["no_open_blockers"]},
         {"from": "Ready", "to": "In Progress", "guards": ["no_open_blockers"]},
         {"from": "In Progress", "to": "In Review", "guards": ["pr_open"]},
         {"from": "In Review", "to": "In QA"},
         {"from": "In QA", "to": "Done", "guards": ["pr_merged"]},
-        {"from": ["Draft","Ready","In Progress"], "to": "Cancelled", "guards": ["reason"]}
+        {"from": ["Draft","Waiting","Ready","In Progress"], "to": "Cancelled", "guards": ["reason"]}
       ]
     }
   }
@@ -344,25 +347,26 @@ Blocked và rework là quy tắc chung, được `domain/` xử lý, không lặ
 
 | Lệnh | Việc |
 |---|---|
-| `init [--milestone NAME]` | Bootstrap (mục 6.1), idempotent |
+| `init --repo-dir R [--milestone M] [--test-cmd C] [--lint-cmd C] [--accept-cmd C] [--from-template N] [--template-only]` | Bootstrap (mục 6.1), idempotent; chạy lại sau khi cập nhật plugin (thêm option Status mới, giữ Status của item) |
+| `doctor` | Kiểm workspace sau khi cập nhật plugin: version, `.github/`, settings, config, field/option Status, `OMI_CONFIG`, secret, default branch, ruleset; mỗi mục OK/WARN/FAIL |
 | `release [--merge]` | Mở (hoặc dùng lại) PR develop→main liệt kê commit, request review team `org-owners`, bật auto-merge (merge commit) nếu được; không có commit mới → `NOTHING`. Mỗi lần chạy đồng bộ team = org owner. `--merge`: có owner org kết luận mới nhất APPROVED và không owner nào CHANGES_REQUESTED thì merge commit (`RELEASED`), không thì `RELEASE WAIT` |
-| `new <type> "title" [--parent N] [--affects N,...] [--milestone M] [--priority P] [--body-file F]` | Tạo item, set type, parent, milestone kế thừa, thêm vào Project, set Status khởi tạo |
-| `move N <status> [--reason R]` | Kiểm tra + chuyển + đồng bộ open/closed + rollup |
+| `new <type> "title" [--parent N] [--affects N,...] [--milestone M] [--priority P] [--estimate E] [--body-file F] [--field "Mục=nội dung"]...` | Tạo item, set type, parent, milestone kế thừa, thêm vào Project, set Status khởi tạo |
+| `move N <status> [--reason R]` | Kiểm tra + chuyển + đồng bộ open/closed + rollup; `Ready` khi còn blocked-by mở → `Waiting`; item kết thúc → item Waiting hết blocker về `Ready` |
 | `rework N --reason R` | Mục 4.5 |
 | `block N (--reason R \| --by M)` / `unblock N` | Mục 4.3 Blocked |
-| `tree [N]` | In cây item kèm status |
+| `tree [N]` | In cây item kèm status, `⛔ #n` cho blocked-by đang mở |
 | `next` | Task/Bug Ready, ưu tiên cao nhất, milestone sớm nhất, không bị chặn |
-| `apply PLAN.json [--approve]` | Tạo cây từ plan, idempotent theo `omi:key` |
-| `plan-show PLAN.json` | Validate (quan hệ + template) + in cây plan (key, type, title, số AC) |
+| `apply PLAN.json [--approve]` | Tạo cây từ plan, idempotent theo `omi:key`; tạo quan hệ `blocked_by` còn thiếu, Task Ready còn blocker mở → Waiting |
+| `plan-show PLAN.json` | Validate (quan hệ + template + `blocked_by`, vòng lặp) + in cây plan (key, type, title, số AC, `⛔` phụ thuộc) |
 | `template <type>` | In khung title + body chuẩn của loại (mục 3.6) |
 | `pr-lint N` | Kiểm title + body PR theo template PR (mục 3.7); in `PR OK` hoặc `PR FAIL` + lỗi; PR release (head = develop) bỏ qua |
 | `audit [--fix]` | Kiểm tra bất biến (mục 6.5) |
 | `context N` | In ngữ cảnh gọn cho LLM: issue, AC của parent, item Affects, quy ước test AC |
-| `start [N]` | Chọn `next` nếu không có N; Draft→Ready→In Progress; checkout branch của issue |
+| `start [N]` | Chọn `next` nếu không có N; Draft→Ready→In Progress (còn blocked-by mở thì dừng ở Waiting, báo lỗi); checkout branch của issue |
 | `check` | Chạy lần lượt `commands.lint`, `typecheck`, `scan`, `test` (cái nào cấu hình); in `CHECK PASS` hoặc `CHECK FAIL (<bước>)` + 60 dòng cuối |
 | `submit N` | Push, tạo PR (`Closes #N`) nếu chưa có, → In Review. Chưa có marker review: ghi gói review `.omi/tmp/review-N.md`, in `REVIEW ... reviewers=code[,security]`. Đã có marker: in `REVIEW ... reviewers=none` |
 | `review-done N [--fail R]` | Ghi marker `<!-- omi:reviewed -->` **sau khi** reviewer trả kết quả; `--fail` → rework với lý do R |
-| `status [--milestone M]` | Một truy vấn: tỉ lệ Done (item, Task/Bug), theo Epic, đếm theo Status, đang làm, Blocked + lý do, rework, task kế tiếp |
+| `status [--milestone M]` | Một truy vấn: tỉ lệ Done (item, Task/Bug), theo Epic, đếm theo Status, đang làm, Blocked + lý do, Waiting + issue đang chặn, rework, task kế tiếp |
 | `resume` | Task dở trong `.omi/tmp/current` + Status + git (dirty, commit chưa merge) + marker review + gói review → `RESUME #n step=<code\|submit\|review\|qa\|blocked\|start\|next>` + gợi ý (+ context) |
 | `qa N` | → In QA, chờ `gh pr checks --watch` (PR không có CI thì chạy `commands.test`, có CI thì không chạy trùng); fail → rework + log `.omi/tmp/qa-N.log`; pass → merge squash → Done → rollup → `accept` parent nếu parent vào In QA |
 | `accept N` | Nghiệm thu Story/Functional Requirement/Non-Functional Requirement: chạy `commands.accept` (thay `{n}`), mỗi AC tự động phải có test `ac<N>_<i>` pass, AC `[manual]` phải được tick; pass → Done; AC tự động fail → rework |
@@ -400,7 +404,7 @@ CLI tìm `.omi/project.json` từ cwd đi lên (chạy được ở workspace ho
 
 ### 5.5 Hooks
 
-- **PreToolUse (Bash)**:
+- **PreToolUse (Bash|PowerShell)**:
   - Chặn (`deny`) `gh issue close|reopen`, `gh project item-edit`, `gh api` có mutation `updateProjectV2ItemFieldValue` khi không đi qua `omi` → thông báo "dùng `omi move`".
   - `ask` khi lệnh là `omi move N Approved` (D7).
 - **SessionStart**: in dòng `OMI_CLI: python "<CLAUDE_PLUGIN_ROOT>/scripts/omi.py"` để skills dùng đường dẫn tuyệt đối; nếu repo có `.omi/project.json` thì nhắc `next`/`tree`, nếu chưa thì gợi ý `OMI_CLI init` — trên 1 dòng. Repo đã init và source là `startup`/`clear`: in thêm context task dở (`.omi/tmp/current`) hoặc `NEXT` (mục 6.3).
@@ -421,7 +425,7 @@ Chạy từ thư mục workspace: `OMI_CLI init --repo-dir <repo>`. Tham số th
 
 1. Kiểm tra: `gh auth` có scope `project, repo, admin:org`; repo (trong `--repo-dir`) thuộc org.
 2. Tạo Issue Types còn thiếu (REST `/orgs/{org}/issue-types`).
-3. Tạo Project bằng `gh project copy` từ **Project mẫu** của org (mang theo fields, views; **không** mang workflow `Auto-add to project`). Nếu đã có Project gắn repo với tiêu đề chuẩn → dùng lại.
+3. Tạo Project mới (hoặc `gh project copy` từ Project mẫu khi có `--from-template`; copy không mang workflow `Auto-add to project`) và tạo 5 view mục 3.4 bằng API (`createProjectV2View` + filter; group by/sort phải chỉnh tay). Nếu đã có Project gắn repo với tiêu đề chuẩn → dùng lại.
 4. Link Project với repo; đảm bảo field Priority/Estimate/Rework Count/Blocked Reason và đủ option Status (tạo bù nếu thiếu).
 5. Built-in workflows: không có API. Plugin tự thêm item vào Project (`add_to_project`), không phụ thuộc Auto-add; `init` in hướng dẫn bật Auto-add trên UI nếu muốn. Item closed → không đổi (plugin tự quản Done/Cancelled).
 6. Workspace: ghi `.omi/project.json`, `AGENTS.md` (merge mục omi nếu file đã có). Repo: issue forms, PR template, workflow audit. Repo variable `OMI_CONFIG` = config (cho Action). Label `security`.
@@ -429,14 +433,14 @@ Chạy từ thư mục workspace: `OMI_CLI init --repo-dir <repo>`. Tham số th
 8. Tùy chọn tạo milestone đầu.
 9. In checklist việc người phải làm: tạo secret `OMI_PROJECT_TOKEN`; `git switch develop` rồi commit `.github/`.
 
-Project mẫu được tạo một lần bằng `omi init --template` (tạo fields + hướng dẫn tạo views thủ công vì API không tạo được views).
+Project mẫu (tùy chọn) tạo bằng `omi init --template-only` (fields + 5 view; group by/sort chỉnh tay).
 
 ### 6.2 PRD → cây item (`/omi-plan <prd>`)
 
-1. Claude đọc PRD, sinh `.omi/plans/<date>-<slug>.json`: cây node `{key, type, title, body, priority, estimate, children}`, Story/Functional Requirement/Non-Functional Requirement có acceptance criteria.
+1. Claude đọc PRD, sinh `.omi/plans/<date>-<slug>.json`: cây node `{key, type, title, body, priority, estimate, affects, children}`; node gốc có thể có `milestone` hoặc `parent` (số issue có sẵn); Task có thể có `blocked_by` (key hoặc số issue). Story/Functional Requirement/Non-Functional Requirement có acceptance criteria.
 2. `domain/planning` kiểm tra quan hệ cha–con của plan trước khi trình.
 3. `plan-show` in cây (script, không để LLM tự vẽ); người duyệt; sửa theo phản hồi.
-4. `omi apply plan.json --approve`: tạo theo thứ tự cha trước con; bỏ qua node đã có `omi:key`; requirement items vào `Approved` (người đã duyệt plan = chốt baseline), Task vào `Ready`.
+4. `omi apply plan.json --approve`: tạo theo thứ tự cha trước con; bỏ qua node đã có `omi:key`; requirement items vào `Approved` (người đã duyệt plan = chốt baseline), Task vào `Ready`; sau đó tạo quan hệ blocked-by, Task còn blocker mở → `Waiting`.
 
 ### 6.3 Vòng implement (`/omi-implement [N]`)
 
@@ -470,7 +474,7 @@ Bị Blocked (vượt rework) → dừng, báo người.
 
 ### 6.5 Audit (GitHub Action)
 
-Trigger: `issues` (opened, edited, closed, reopened, typed, milestoned), `pull_request` (closed), cron hằng ngày, `workflow_dispatch`. Checkout repo omi-hub vào `.omi-hub/` rồi chạy `python .omi-hub/scripts/omi.py audit --fix` với `OMI_PROJECT_TOKEN` và `OMI_CONFIG: ${{ vars.OMI_CONFIG }}` (repo không có `.omi/` — D12).
+Trigger: `issues` (opened, edited, closed, reopened, typed, untyped, milestoned, demilestoned), `pull_request` (closed), cron hằng ngày, `workflow_dispatch`. Checkout repo omi-hub vào `.omi-hub/` rồi chạy `python .omi-hub/scripts/omi.py audit --fix` với `OMI_PROJECT_TOKEN` và `OMI_CONFIG: ${{ vars.OMI_CONFIG }}` (repo không có `.omi/` — D12).
 
 Action không biết status trước đó (Projects không phát event cho Actions), nên kiểm tra **bất biến của trạng thái hiện tại**:
 
@@ -482,6 +486,8 @@ Action không biết status trước đó (Projects không phát event cho Actio
 | Issue closed ⇔ Status Done/Cancelled | Có: closed+open-status → Done/Cancelled theo state_reason; Done/Cancelled+open → đóng |
 | Story/Functional Requirement/Non-Functional Requirement/Epic Done ⇒ mọi con kết thúc | Không, báo |
 | Blocked ⇒ có reason hoặc blocker mở | Không, báo |
+| Waiting ⇒ còn blocker mở | Có: → Ready |
+| Task/Bug Ready ⇒ không còn blocker mở (blocked-by thêm tay trên GitHub) | Có: → Waiting |
 | Milestone con = milestone Epic tổ tiên | Có |
 | Item trong repo chưa vào Project | Có: thêm, set Status khởi tạo |
 
@@ -505,7 +511,7 @@ Kết quả ghi vào một issue duy nhất "OMI Audit" (tạo nếu chưa có, 
 |---|---|
 | REST tạo issue type cho org và gán type cho issue | Không có phương án thay; điều kiện tiên quyết |
 | Sub-issues API (`addSubIssue`, đọc children) | Điều kiện tiên quyết |
-| Issue dependencies API (blocked-by) | Dùng mục `### Blocked by` trong body |
+| ✓ Issue dependencies API (REST `dependencies/blocked_by`, GraphQL `blockedBy`/`blocking`) | — |
 | `gh project copy` giữ views + built-in workflows | Views: giữ ✓, thiếu thì tạo bằng REST `projectsV2/{n}/views`. Workflow Auto-add: không giữ → plugin tự thêm item |
 | Projects có cột Type cho issue types — ✗ `field-list` và GraphQL `fields` không trả field Type (spike mục 6) | Không dùng field Type trong Project: type lấy từ `issueType` của issue (snapshot, audit, tree) |
 | ✓ 2026-11-24: tạo Issue Type tên dài; issue với `type` (REST); `POST sub_issues`; `updateProjectV2Field` options Status | — |
