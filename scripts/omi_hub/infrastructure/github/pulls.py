@@ -14,9 +14,10 @@ def develop(cfg, n, cwd=None):
     client.run(["issue", "develop", str(n), "-R", client.repo_full(cfg), "--checkout"], cwd=cwd)
 
 
-def create_pr(cfg, title, body, head):
+def create_pr(cfg, title, body, head, base=None, reviewer=None):
+    extra = (["--base", base] if base else []) + (["--reviewer", reviewer] if reviewer else [])
     url = client.run(["pr", "create", "-R", client.repo_full(cfg), "--head", head, "--title", title,
-               "--body-file", "-"], input=body).strip().splitlines()[-1]
+               "--body-file", "-", *extra], input=body).strip().splitlines()[-1]
     return int(url.rstrip("/").split("/")[-1])
 
 
@@ -28,8 +29,9 @@ def open_pr_for_branch(cfg, head):
 
 
 def pr_view(cfg, pr):
-    d = json.loads(client.run(["pr", "view", str(pr), "-R", client.repo_full(cfg), "--json", "title,body"]))
-    return d["title"], d["body"]
+    d = json.loads(client.run(["pr", "view", str(pr), "-R", client.repo_full(cfg), "--json",
+                               "title,body,headRefName"]))
+    return d["title"], d["body"], d["headRefName"]
 
 
 def pr_diff(cfg, pr):
@@ -60,5 +62,7 @@ def _failed_logs(cfg, table, lines=60):
     return "".join(out)
 
 
-def merge_pr(cfg, pr):
-    client.run(["pr", "merge", str(pr), "-R", client.repo_full(cfg), "--squash", "--delete-branch"])
+def merge_pr(cfg, pr, release=False, auto=False):
+    """Task: squash + xóa branch. Release develop→main: merge commit, giữ develop (squash làm 2 nhánh lệch)."""
+    how = ["--merge"] if release else ["--squash", "--delete-branch"]
+    client.run(["pr", "merge", str(pr), "-R", client.repo_full(cfg), *how, *(["--auto"] if auto else [])])

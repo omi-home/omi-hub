@@ -8,5 +8,6 @@ Dự án quản lý bằng omi-hub (GitHub Project). `OMI_CLI` = lệnh ở dòn
 - Test nghiệm thu: AC thứ i của issue #p ↔ test có tên chứa `ac<p>_<i>`; AC không tự động hóa được ghi `[manual]`.
 - Mỗi loại có template chuẩn: title có prefix đầy đủ (`[Functional Requirement] ...`, CLI tự thêm) + body theo `OMI_CLI template <type>`; tạo nhanh bằng `new ... --field "Mục=nội dung"`. PR do `submit` sinh theo template PR. CLI từ chối sai mẫu.
 - Làm task: skill omi-implement. Lập backlog từ PRD: skill omi-plan.
-- Lệnh: next · tree [n] · context n · start [n] · check · submit n · qa n · accept n · new · move · rework · block · unblock · impact · audit
+- Nhánh: PR task vào develop (do `submit`); lên main chỉ qua `release` (PR develop→main, PO approve rồi `release --merge`).
+- Lệnh: next · tree [n] · context n · start [n] · check · submit n · qa n · accept n · new · move · rework · block · unblock · impact · audit · release
 <!-- omi:end -->

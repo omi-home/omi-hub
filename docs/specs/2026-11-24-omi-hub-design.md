@@ -32,6 +32,7 @@ Ngoài phạm vi v1: tài khoản cá nhân (không có Issue Types), một Proj
 | D9 | Memory dùng cơ chế gốc: subagent `memory: project` → `.claude/agent-memory/<plugin>-<agent>/` (vd. `omi-hub-omi-reviewer/`) | Không tự chế memory |
 | D10 | **Script-first, ưu tiên hàng đầu với mọi yêu cầu mới: việc gì script làm được thì không dùng LLM** (mục 2.1) | Theo yêu cầu; tối ưu token |
 | D12 | **Mô hình workspace**: `AGENTS.md`, `.claude/`, `.omi/` ở thư mục workspace; repo git là thư mục con, chỉ chứa code/docs/`.github/` (mục 5.4) | Tách công cụ agent khỏi mã sản phẩm |
+| D13 | **Nhánh develop mặc định cho mọi project**: develop là default branch, PR task vào develop; nhánh chính chỉ nhận PR release develop→main (merge commit) khi PO approve. Ép buộc bằng ruleset + CODEOWNERS `* @po`; repo không có ruleset (private gói Free) thì chỉ `release --merge` kiểm | Theo yêu cầu; develop là default nên `issue develop`, `pr create`, `Closes #n` không đổi |
 | D11 | **Phiên chính tự viết code và tự sửa** (không tách subagent viết code). Ngữ cảnh mới mỗi task bằng `/clear` + `context N` | Tách vai trò làm mất ngữ cảnh ở mỗi lần chuyển việc → đọc lại codebase, review không hội tụ, rework dây chuyền; thực tế tốn quota hơn |
 
 ### 2.1 Phân bổ LLM và script
@@ -338,7 +339,8 @@ Blocked và rework là quy tắc chung, được `domain/` xử lý, không lặ
 
 | Lệnh | Việc |
 |---|---|
-| `init [--milestone NAME]` | Bootstrap (mục 6.1), idempotent |
+| `init --po LOGIN [--milestone NAME]` | Bootstrap (mục 6.1), idempotent |
+| `release [--merge]` | Mở (hoặc dùng lại) PR develop→main liệt kê commit, request review PO, bật auto-merge (merge commit) nếu được; không có commit mới → `NOTHING`. `--merge`: kết luận mới nhất của PO = APPROVED thì merge commit (`RELEASED`), không thì `RELEASE WAIT` |
 | `new <type> "title" [--parent N] [--affects N,...] [--milestone M] [--priority P] [--body-file F]` | Tạo item, set type, parent, milestone kế thừa, thêm vào Project, set Status khởi tạo |
 | `move N <status> [--reason R]` | Kiểm tra + chuyển + đồng bộ open/closed + rollup |
 | `rework N --reason R` | Mục 4.5 |
@@ -348,7 +350,7 @@ Blocked và rework là quy tắc chung, được `domain/` xử lý, không lặ
 | `apply PLAN.json [--approve]` | Tạo cây từ plan, idempotent theo `omi:key` |
 | `plan-show PLAN.json` | Validate (quan hệ + template) + in cây plan (key, type, title, số AC) |
 | `template <type>` | In khung title + body chuẩn của loại (mục 3.6) |
-| `pr-lint N` | Kiểm title + body PR theo template PR (mục 3.7); in `PR OK` hoặc `PR FAIL` + lỗi |
+| `pr-lint N` | Kiểm title + body PR theo template PR (mục 3.7); in `PR OK` hoặc `PR FAIL` + lỗi; PR release (head = develop) bỏ qua |
 | `audit [--fix]` | Kiểm tra bất biến (mục 6.5) |
 | `context N` | In ngữ cảnh gọn cho LLM: issue, AC của parent, item Affects, quy ước test AC |
 | `start [N]` | Chọn `next` nếu không có N; Draft→Ready→In Progress; checkout branch của issue |
@@ -377,7 +379,7 @@ Lỗi: in thông điệp rõ ràng (vì sao không hợp lệ, cần làm gì), 
 
 CLI tìm `.omi/project.json` từ cwd đi lên (chạy được ở workspace hoặc trong repo); mọi lệnh git/gh cần working copy và `commands.*` chạy với `cwd = <workspace>/<repo_dir>`. Trong GitHub Action không có workspace: `init` lưu config vào repo variable `OMI_CONFIG`, CLI đọc biến này khi không tìm thấy file.
 
-**Workspace** — `.omi/project.json`: owner, repo, `repo_dir`, `default_branch`, project number, project node id, field id và option id (cache để khỏi tra mỗi lần), và:
+**Workspace** — `.omi/project.json`: owner, repo, `repo_dir`, `default_branch` (develop), `main_branch`, `po`, project number, project node id, field id và option id (cache để khỏi tra mỗi lần), và:
   - `commands`: `{"lint": "...", "typecheck": "...", "scan": "gitleaks detect --no-banner && semgrep --error -q", "test": "...", "accept": "pytest -k ac{n}_ -rA"}` (lệnh shell của dự án, cái nào bỏ trống thì bỏ qua; `{n}` = số issue nghiệm thu).
   - `security_paths`: danh sách regex đường dẫn file kích hoạt security review (mặc định: auth, login, password, secret, token, crypto, permission, acl, session, `\.env`, sql).
   - `review_max_diff_lines`: cắt diff trong gói review (mặc định 1500).
@@ -418,8 +420,9 @@ Chạy từ thư mục workspace: `OMI_CLI init --repo-dir <repo>`. Tham số th
 4. Link Project với repo; đảm bảo field Priority/Estimate/Rework Count/Blocked Reason và đủ option Status (tạo bù nếu thiếu).
 5. Built-in workflows: không có API. Plugin tự thêm item vào Project (`add_to_project`), không phụ thuộc Auto-add; `init` in hướng dẫn bật Auto-add trên UI nếu muốn. Item closed → không đổi (plugin tự quản Done/Cancelled).
 6. Workspace: ghi `.omi/project.json`, `AGENTS.md` (merge mục omi nếu file đã có). Repo: issue forms, PR template, workflow audit. Repo variable `OMI_CONFIG` = config (cho Action). Label `security`.
-7. Tùy chọn tạo milestone đầu.
-8. In checklist việc người phải làm: tạo secret `OMI_PROJECT_TOKEN`.
+7. Luồng release (D13): CODEOWNERS `* @<po>` lên nhánh chính (contents API, trước ruleset), tạo develop từ nhánh chính, default branch = develop (bật merge commit + auto-merge), ruleset `omi-release` trên nhánh chính (cấm xóa/force push; PR + 1 approve + code owner, chỉ merge commit, approve cũ mất khi có push mới). Ruleset lỗi → cảnh báo, không dừng. Config: `default_branch`=develop, `main_branch`, `po`.
+8. Tùy chọn tạo milestone đầu.
+9. In checklist việc người phải làm: tạo secret `OMI_PROJECT_TOKEN`; `git switch develop` rồi commit `.github/`.
 
 Project mẫu được tạo một lần bằng `omi init --template` (tạo fields + hướng dẫn tạo views thủ công vì API không tạo được views).
 

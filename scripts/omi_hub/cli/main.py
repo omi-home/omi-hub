@@ -3,7 +3,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from omi_hub.application import audit, items, pipeline, plans, setup, views
+from omi_hub.application import audit, items, pipeline, plans, release, setup, views
 from omi_hub.application.workspace import load_cfg
 from omi_hub.config import load_templates, load_workflow
 from omi_hub.domain.errors import RuleError
@@ -31,6 +31,9 @@ def build_parser():
     p.add_argument("--lint-cmd")
     p.add_argument("--accept-cmd")
     p.add_argument("--repo-dir", default=".", help="repo git, tương đối với workspace (cwd)")
+    p.add_argument("--po", help="login GitHub của PO, người approve PR release develop→main")
+    p = sub.add_parser("release")
+    p.add_argument("--merge", action="store_true", help="merge PR release nếu PO đã approve")
     p = sub.add_parser("new")
     p.add_argument("type")
     p.add_argument("title")
@@ -87,7 +90,7 @@ def build_parser():
 def run(a, wf):
     if a.cmd == "init":
         setup.init(wf, a.milestone, a.from_template, a.template_only, a.hub_repo,
-                   a.test_cmd, a.lint_cmd, a.accept_cmd, a.repo_dir)
+                   a.test_cmd, a.lint_cmd, a.accept_cmd, a.repo_dir, a.po)
         return 0
     if a.cmd == "template":
         print(skeleton(load_templates(), a.type))
@@ -99,6 +102,8 @@ def run(a, wf):
         return {"check": lambda: pipeline.check(cfg), "qa": lambda: pipeline.qa(cfg, wf, a.number),
                 "accept": lambda: pipeline.accept(cfg, wf, a.number),
                 "pr-lint": lambda: pipeline.pr_lint(cfg, a.number)}[a.cmd]()
+    if a.cmd == "release":
+        return release.release(cfg, a.merge)
     if a.cmd == "context":
         pipeline.context(cfg, a.number)
     elif a.cmd == "start":
