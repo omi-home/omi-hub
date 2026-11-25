@@ -55,8 +55,11 @@ def main_branch(cfg, old):
 def release_flow(cfg, old):
     """develop = default branch (PR task, Closes #n giữ nguyên); nhánh chính chỉ nhận PR release có PO duyệt.
     Trả danh sách cảnh báo."""
-    main, warns, team = main_branch(cfg, old), [], po_team(cfg["owner"])
+    warns, team = [], po_team(cfg["owner"])
     sync_po_team(cfg)
+    if not old.get("main_branch") and not gh.default_branch(cfg["owner"], cfg["repo"]):
+        gh.ensure_codeowners(cfg, None, team)  # repo rỗng: commit đầu tạo nhánh mặc định
+    main = main_branch(cfg, old)
     try:
         gh.ensure_codeowners(cfg, main, team)  # trước ruleset: sau đó nhánh chính không nhận push thẳng
     except gh.GhError as e:  # đổi PO khi ruleset đã có: đi qua develop, PO cũ duyệt release kế tiếp

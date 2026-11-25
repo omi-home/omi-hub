@@ -42,6 +42,8 @@ class FakeGh:
             raise self.GhError("Repository rule violations found")
         if self.codeowners_err:
             raise self.GhError(self.codeowners_err)
+        if branch is None:  # repo rỗng: commit đầu tạo nhánh mặc định
+            self.default = "main"
         self.calls.append(("ensure_codeowners", (branch, team), {}))
 
     def default_branch(self, owner, repo):
@@ -120,6 +122,13 @@ class TestReleaseFlow(unittest.TestCase):
             self.run_flow(g)
         self.assertIn("403", str(ctx.exception))
         self.assertEqual(g.calls, [])  # không rẽ sang develop
+
+    def test_empty_repo_gets_first_commit(self):
+        g = FakeGh(default="")
+        cfg, _ = self.run_flow(g)
+        self.assertEqual(g.calls[0], ("ensure_codeowners", (None, TEAM), {}))
+        self.assertEqual(cfg["main_branch"], "main")
+        self.assertIn(("ensure_branch", ("develop", "main"), {}), g.calls)
 
     def test_ac70_2_lost_config_finds_master(self):
         g = FakeGh(default="develop")
