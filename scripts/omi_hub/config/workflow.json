@@ -16,6 +16,7 @@
       ]
     },
     "User Story": {
+      "legacy": true,
       "initial": "Draft", "parents": ["Epic"], "requires": ["parent"], "on_children_done": "In QA",
       "transitions": [
         {"from": "Draft", "to": "Approved"},

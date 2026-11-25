@@ -57,7 +57,10 @@ class TestWriteTemplates(unittest.TestCase):
             forms = sorted(p.name for p in (dest / ".github/ISSUE_TEMPLATE").glob("*.yml"))
             self.assertEqual(forms, ["bug.yml", "change-request.yml", "config.yml", "epic.yml",
                                      "functional-requirement.yml", "non-functional-requirement.yml",
-                                     "task.yml", "user-story.yml"])
+                                     "task.yml"])
+            (dest / ".github/ISSUE_TEMPLATE/user-story.yml").write_text("cũ", encoding="utf-8")
+            setup.write_templates("acme/omi-hub", dest, ws)  # form loại legacy bị gỡ
+            self.assertFalse((dest / ".github/ISSUE_TEMPLATE/user-story.yml").exists())
             wf = (dest / ".github/workflows/omi-audit.yml").read_text(encoding="utf-8")
             self.assertIn("repository: acme/omi-hub", wf)
             self.assertNotIn("__OMI_HUB_REPO__", wf)

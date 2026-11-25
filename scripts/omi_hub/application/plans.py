@@ -5,7 +5,7 @@ from pathlib import Path
 from omi_hub.application import items
 from omi_hub.config import load_templates
 from omi_hub.domain.errors import RuleError
-from omi_hub.domain.lifecycle import WAITING
+from omi_hub.domain.lifecycle import WAITING, check_creatable
 from omi_hub.domain.planning import validate_plan
 from omi_hub.domain.templates import with_prefix
 from omi_hub.infrastructure.github import gateway as gh
@@ -33,6 +33,11 @@ def apply(cfg, wf, plan_path, approve=False):
         old = found.get(node["key"])
         if old and old["title"] != with_prefix(tpl, node["type"], node["title"]):
             errs.append(f"key {node['key']} đã là #{old['number']} '{old['title']}' — đổi key hoặc sửa title cho khớp")
+        if node["key"] not in found:  # node đã có trên GitHub (plan cũ) được bỏ qua như trước
+            try:
+                check_creatable(wf, node["type"])
+            except RuleError as e:
+                errs.append(f"{node['key']}: {e}")
         errs += [f"{node['key']}: blocked_by key '{b}' không có trong plan hay repo"
                  for b in node.get("blocked_by", []) if isinstance(b, str) and b not in known]
     if errs:  # trước khi tạo gì: key trùng plan khác sẽ gắn nhầm cả cây con

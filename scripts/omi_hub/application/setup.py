@@ -2,7 +2,7 @@
 import json
 from pathlib import Path
 
-from omi_hub.config import load_pr_template, load_templates
+from omi_hub.config import load_pr_template, load_templates, load_workflow
 from omi_hub.application.release import sync_po_team
 from omi_hub.domain.errors import RuleError
 from omi_hub.domain.release import po_team
@@ -21,8 +21,13 @@ def write_templates(hub_repo, repo=Path("."), workspace=Path(".")):
     forms.mkdir(parents=True, exist_ok=True)
     (forms / "config.yml").write_text((TEMPLATES / "ISSUE_TEMPLATE" / "config.yml").read_text(encoding="utf-8"),
                                       encoding="utf-8")
+    legacy = {k for k, v in load_workflow()["types"].items() if v.get("legacy")}
     for type_, t in load_templates().items():
-        (forms / form_filename(type_)).write_text(render_form(type_, t), encoding="utf-8")
+        f = forms / form_filename(type_)
+        if type_ in legacy:
+            f.unlink(missing_ok=True)  # loại legacy không tạo mới qua form
+        else:
+            f.write_text(render_form(type_, t), encoding="utf-8")
     (repo / ".github" / "pull_request_template.md").write_text(render_pr_template(load_pr_template()),
                                                                 encoding="utf-8")
     wfdir = repo / ".github" / "workflows"

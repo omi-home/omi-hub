@@ -18,9 +18,10 @@
     ]
   },
   "Functional Requirement": {
-    "title": {"pattern": "^Hệ thống (phải|cần) .+$", "example": "Hệ thống phải gửi email xác nhận khi đơn hàng được tạo", "hint": "Hệ thống phải <hành vi>", "prefill": "Hệ thống phải "},
+    "title": {"pattern": "^(Hệ thống (phải|cần) .+|\\S.* có thể .+)$", "example": "Hệ thống phải gửi email xác nhận khi đơn hàng được tạo", "hint": "Hệ thống phải <hành vi> | <vai trò> có thể <hành động>", "prefill": "Hệ thống phải "},
     "sections": [
       {"heading": "Mô tả", "required": true, "hint": "Đầu vào → xử lý → đầu ra"},
+      {"heading": "Story", "required": false, "pattern": "^Là .+, tôi muốn .+ để .+", "hint": "Là <vai trò>, tôi muốn <hành động> để <giá trị> (khi yêu cầu xuất phát từ một vai trò)"},
       {"heading": "Acceptance criteria", "required": true, "default": "- [ ] ", "checklist": true, "hint": "Mỗi dòng kiểm chứng được bằng test; không tự động được thì ghi [manual]"},
       {"heading": "Ràng buộc", "required": false},
       {"heading": "Tham chiếu", "required": false, "hint": "Mỗi dòng một docs/<file>.md#<mục>; context ghép đúng mục đó, không chép tài liệu vào đây"}
