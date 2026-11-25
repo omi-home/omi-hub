@@ -186,6 +186,11 @@ class TestViews(unittest.TestCase):
         with self.assertRaises(RuleError):
             views.tree(CFG, 5)
 
+    def test_ac105_1_tree_shows_open_blockers(self):
+        items = [dict(self.ITEMS[0]), dict(self.ITEMS[1], status="Waiting", blockers=[7, 8], open_blockers=2)]
+        views.gh.project_items.return_value = items
+        self.assertEqual(views.tree(CFG), ["#1 [Epic] E — In Progress", "  #2 [Task] T — Waiting ⛔ #7, #8"])
+
     def test_next(self):
         self.assertEqual(views.next_item(CFG, WF)["number"], 2)
 

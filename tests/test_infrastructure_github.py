@@ -52,8 +52,10 @@ class TestNormalize(unittest.TestCase):
         node = {"id": "ITEM", "status": {"name": "Ready"}, "priority": {"name": "P1"}, "blocked": None,
                 "content": {"id": "I_7", "number": 7, "title": "t", "state": "OPEN", "stateReason": None,
                             "issueType": {"name": "Task"}, "milestone": {"title": "v1", "dueOn": "2026-12-01T00:00:00Z"},
-                            "parent": {"number": 3}, "blockedBy": {"nodes": [{"state": "OPEN"}]}}}
+                            "parent": {"number": 3}, "blockedBy": {"nodes": [{"number": 4, "state": "OPEN"},
+                                                                                {"number": 5, "state": "CLOSED"}]}}}
         it = project.normalize_project_item(node)
+        self.assertEqual(it["blockers"], [4])
         self.assertEqual((it["number"], it["status"], it["priority"], it["parent"], it["open_blockers"]),
                          (7, "Ready", "P1", 3, 1))
         self.assertEqual(it["milestone_due"], "2026-12-01T00:00:00Z")

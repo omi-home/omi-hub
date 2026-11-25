@@ -15,7 +15,8 @@ def tree(cfg, n=None):
     lines = []
 
     def walk(i, indent):
-        lines.append(f"{indent}#{i['number']} {i['title']} — {i['status']}")  # title đã có prefix loại
+        dep = " ⛔ " + ", ".join(f"#{b}" for b in i["blockers"]) if i.get("blockers") else ""
+        lines.append(f"{indent}#{i['number']} {i['title']} — {i['status']}{dep}")  # title đã có prefix loại
         for c in sorted(kids.get(i["number"], []), key=lambda x: x["number"]):
             walk(c, indent + "  ")
 

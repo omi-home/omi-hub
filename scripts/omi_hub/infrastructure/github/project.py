@@ -17,7 +17,7 @@ query($id: ID!, $after: String) {
       rework: fieldValueByName(name: "Rework Count") { ... on ProjectV2ItemFieldNumberValue { number } }
       blocked: fieldValueByName(name: "Blocked Reason") { ... on ProjectV2ItemFieldTextValue { text } }
       content { ... on Issue { id number title state stateReason issueType { name }
-        milestone { title dueOn } parent { number } blockedBy(first: 50) { nodes { state } } } }
+        milestone { title dueOn } parent { number } blockedBy(first: 50) { nodes { number state } } } }
     } } } }
 }"""
 
@@ -35,7 +35,8 @@ def normalize_project_item(node):
         "blocked_reason": field_value(node, "blocked", "text"),
         "milestone": ms.get("title"), "milestone_due": ms.get("dueOn"),
         "parent": (c.get("parent") or {}).get("number"),
-        "open_blockers": sum(1 for b in c["blockedBy"]["nodes"] if b["state"] == "OPEN"),
+        "blockers": (blockers := [b["number"] for b in c["blockedBy"]["nodes"] if b["state"] == "OPEN"]),
+        "open_blockers": len(blockers),
         "in_project": True,
     }
 
