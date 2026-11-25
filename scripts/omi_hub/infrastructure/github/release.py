@@ -7,10 +7,10 @@ from . import client
 RULESET = "omi-release"
 
 
-def ensure_codeowners(cfg, branch, po):
-    """Ghi `.github/CODEOWNERS` = `* @po` thẳng lên nhánh chính (GitHub đọc CODEOWNERS từ nhánh base)."""
-    path, want = f"{client.repo_path(cfg)}/contents/.github/CODEOWNERS", f"* @{po}\n"
-    body = {"message": f"chore: CODEOWNERS release cho @{po} (omi)", "branch": branch,
+def ensure_codeowners(cfg, branch, team):
+    """Ghi `.github/CODEOWNERS` = `* @org/team` (GitHub đọc CODEOWNERS từ nhánh base)."""
+    path, want = f"{client.repo_path(cfg)}/contents/.github/CODEOWNERS", f"* @{team}\n"
+    body = {"message": f"chore: CODEOWNERS release cho @{team} (omi)", "branch": branch,
             "content": base64.b64encode(want.encode()).decode()}
     try:
         cur = client.rest("GET", f"{path}?ref={branch}")
@@ -61,6 +61,33 @@ def ensure_ruleset(cfg, branch):
         return None
     except client.GhError as e:
         return str(e).splitlines()[0]
+
+
+def org_owners(org):
+    return [m["login"] for m in client.rest("GET", f"orgs/{org}/members?role=admin&per_page=100")]
+
+
+def ensure_team(cfg, slug):
+    """Team tồn tại và có quyền push repo (CODEOWNERS chỉ nhận team có quyền ghi)."""
+    org = cfg["owner"]
+    try:
+        client.rest("GET", f"orgs/{org}/teams/{slug}")
+    except client.GhError:
+        client.rest("POST", f"orgs/{org}/teams", {"name": slug, "privacy": "closed",
+                                                  "description": "PO: owner của org, duyệt release (omi)"})
+    client.rest("PUT", f"orgs/{org}/teams/{slug}/repos/{cfg['owner']}/{cfg['repo']}", {"permission": "push"})
+
+
+def team_members(cfg, slug):
+    return [m["login"] for m in client.rest("GET", f"orgs/{cfg['owner']}/teams/{slug}/members?per_page=100")]
+
+
+def add_team_member(cfg, slug, login):
+    client.rest("PUT", f"orgs/{cfg['owner']}/teams/{slug}/memberships/{login}", {"role": "member"})
+
+
+def remove_team_member(cfg, slug, login):
+    client.rest("DELETE", f"orgs/{cfg['owner']}/teams/{slug}/memberships/{login}")
 
 
 def compare_commits(cfg, base, head):

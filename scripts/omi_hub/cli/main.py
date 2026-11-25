@@ -31,9 +31,8 @@ def build_parser():
     p.add_argument("--lint-cmd")
     p.add_argument("--accept-cmd")
     p.add_argument("--repo-dir", default=".", help="repo git, tương đối với workspace (cwd)")
-    p.add_argument("--po", help="login GitHub của PO, người approve PR release develop→main")
     p = sub.add_parser("release")
-    p.add_argument("--merge", action="store_true", help="merge PR release nếu PO đã approve")
+    p.add_argument("--merge", action="store_true", help="merge PR release nếu owner org đã approve")
     p = sub.add_parser("new")
     p.add_argument("type")
     p.add_argument("title")
@@ -90,7 +89,7 @@ def build_parser():
 def run(a, wf):
     if a.cmd == "init":
         setup.init(wf, a.milestone, a.from_template, a.template_only, a.hub_repo,
-                   a.test_cmd, a.lint_cmd, a.accept_cmd, a.repo_dir, a.po)
+                   a.test_cmd, a.lint_cmd, a.accept_cmd, a.repo_dir)
         return 0
     if a.cmd == "template":
         print(skeleton(load_templates(), a.type))
