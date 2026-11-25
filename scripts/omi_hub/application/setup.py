@@ -47,6 +47,14 @@ def enable_plugin(hub_repo, workspace):
     path.write_text(json.dumps(s, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
+VIEWS = [  # docs/views.md; group by/sort phải chỉnh tay (API chưa hỗ trợ)
+    {"name": "Board", "layout": "BOARD_LAYOUT", "filter": "-status:Done,Cancelled"},
+    {"name": "Hierarchy", "layout": "TABLE_LAYOUT"},
+    {"name": "Requirements", "layout": "TABLE_LAYOUT",
+     "filter": 'type:"User Story","Functional Requirement","Non-Functional Requirement","Change Request"'},
+    {"name": "Delivery", "layout": "TABLE_LAYOUT", "filter": "type:Task,Bug"},
+    {"name": "Blocked & Rework", "layout": "TABLE_LAYOUT", "filter": "status:Blocked"},
+]
 DEVELOP = "develop"
 MAIN_CANDIDATES = ("main", "master")
 
@@ -101,8 +109,10 @@ def init(wf, milestone=None, from_template=None, template_only=False, hub_repo="
     if number is None:
         number = gh.copy_project(owner, from_template, title) if from_template else gh.create_project(owner, title)
     gh.ensure_fields(owner, number, wf)
+    if not from_template:  # project copy đã có view của mẫu
+        gh.ensure_views(gh.project_node_id(owner, number), VIEWS)
     if template_only:
-        print(f"✅ Project mẫu #{number}. Tạo views theo docs/views.md của omi-hub.")
+        print(f"✅ Project mẫu #{number} có 5 view. Chỉnh group by/sort/workflows theo docs/views.md của omi-hub.")
         return
     gh.link_project(owner, number, f"{owner}/{repo}")
     new_cmds = {"test": test_cmd, "lint": lint_cmd, "accept": accept_cmd}
@@ -127,4 +137,4 @@ def init(wf, milestone=None, from_template=None, template_only=False, hub_repo="
           f" Contents R cho {hub_repo}).\n"
           f"  2. Trong repo: `git fetch && git switch {DEVELOP}`, commit .github/ vào {DEVELOP}"
           " (AGENTS.md và .omi/ ở workspace, không commit).\n"
-          + ("" if from_template else "  3. Tạo views theo docs/views.md (hoặc dùng --from-template lần sau).\n"))
+          + ("" if from_template else "  3. Chỉnh group by/sort của view theo docs/views.md (API chưa hỗ trợ).\n"))
