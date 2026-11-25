@@ -3,7 +3,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from omi_hub.application import audit, items, pipeline, plans, release, setup, views
+from omi_hub.application import audit, doctor, items, pipeline, plans, release, setup, views
 from omi_hub.application.workspace import load_cfg
 from omi_hub.config import load_templates, load_workflow
 from omi_hub.domain.errors import RuleError
@@ -31,6 +31,7 @@ def build_parser():
     p.add_argument("--lint-cmd")
     p.add_argument("--accept-cmd")
     p.add_argument("--repo-dir", default=".", help="repo git, tương đối với workspace (cwd)")
+    sub.add_parser("doctor", help="kiểm workspace sau khi cập nhật plugin")
     p = sub.add_parser("release")
     p.add_argument("--merge", action="store_true", help="merge PR release nếu owner org đã approve")
     p = sub.add_parser("new")
@@ -101,6 +102,8 @@ def run(a, wf):
         return {"check": lambda: pipeline.check(cfg), "qa": lambda: pipeline.qa(cfg, wf, a.number),
                 "accept": lambda: pipeline.accept(cfg, wf, a.number),
                 "pr-lint": lambda: pipeline.pr_lint(cfg, a.number)}[a.cmd]()
+    if a.cmd == "doctor":
+        return doctor.doctor(cfg)
     if a.cmd == "release":
         return release.release(cfg, a.merge)
     if a.cmd == "context":
