@@ -51,8 +51,7 @@ def start(cfg, wf, n=None):
         n = it["number"]
     status = items.snapshot(cfg, n)["status"]
     if status == "Draft":
-        items.move(cfg, wf, n, "Ready")
-        status = "Ready"
+        status = items.move(cfg, wf, n, "Ready")  # còn blocker mở → Waiting, không start
     if status == "Ready":
         items.move(cfg, wf, n, "In Progress")
     elif status != "In Progress":

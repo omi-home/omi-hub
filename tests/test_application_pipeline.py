@@ -89,6 +89,15 @@ class TestPipeline(unittest.TestCase):
         self.assertEqual(self.g.developed, [3])
         self.assertEqual((self.T / "current").read_text(encoding="utf-8"), "3")
 
+    def test_start_draft_with_open_blocker_stops_at_waiting(self):
+        self.g.add(2, "User Story", "Approved")
+        self.g.add(3, "Task", "Draft", parent=2)
+        self.g.add(4, "Task", "Ready", parent=2)
+        self.g.blockers = {3: [4]}
+        with self.assertRaisesRegex(RuleError, "đang ở 'Waiting'"):
+            pipeline.start(self.cfg, WF, 3)
+        self.assertEqual((self.st(3), self.g.developed), ("Waiting", []))
+
     def test_submit_first_time_requests_review_with_security(self):
         self.g.add(2, "User Story", "In Progress", body=AC1)
         self.g.add(3, "Task", "In Progress", parent=2)
