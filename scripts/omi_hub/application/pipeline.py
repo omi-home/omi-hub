@@ -205,7 +205,10 @@ def plan_show(wf, path):
 
 
 def pr_lint(cfg, pr):
-    title, body = gh.pr_view(cfg, pr)
+    title, body, head = gh.pr_view(cfg, pr)
+    if cfg.get("main_branch") and head == cfg.get("default_branch"):  # PR release develop→main: không theo mẫu task
+        print("PR OK (release)")
+        return 0
     errs = check_pr(load_pr_template(), title, body)
     print("PR OK" if not errs else "PR FAIL\n" + "\n".join(f"- {e}" for e in errs))
     return 1 if errs else 0

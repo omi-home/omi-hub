@@ -16,11 +16,12 @@ Claude Code cũ hơn 2.1.275: `/plugin marketplace add omi-home/omi-hub` rồi `
 
 ## Dùng (`OMI_CLI` in ở dòng đầu mỗi phiên Claude Code)
 1. Một lần mỗi org: `OMI_CLI init --template-only` → tạo views theo `docs/views.md`.
-2. Mỗi dự án, từ thư mục workspace (repo là thư mục con): `OMI_CLI init --repo-dir <repo> --from-template <số project mẫu> --test-cmd "..." --accept-cmd "..."`, tạo secret `OMI_PROJECT_TOKEN`. `AGENTS.md`, `.claude/`, `.omi/` nằm ở workspace, không vào repo.
+2. Mỗi dự án, từ thư mục workspace (repo là thư mục con): `OMI_CLI init --repo-dir <repo> --po <login PO> --from-template <số project mẫu> --test-cmd "..." --accept-cmd "..."`, tạo secret `OMI_PROJECT_TOKEN`. `AGENTS.md`, `.claude/`, `.omi/` nằm ở workspace, không vào repo.
 3. Backlog từ PRD: skill `omi-plan`.
 4. Làm task: skill `omi-implement`; `/clear` giữa các task (hook tự nạp task dở hoặc task kế tiếp; phiên bị ngắt → skill `omi-resume`).
 5. Change Request/Bug: skill `omi-change`.
-6. Còn lại chạy thẳng, không tốn token: `OMI_CLI status | tree | next | template <type> | new | move | block | audit`.
+6. Release: PR task vào `develop`; `OMI_CLI release` mở PR develop→main chờ PO approve (có ruleset thì tự merge, không thì `OMI_CLI release --merge`). PO phải là tài khoản khác tài khoản chạy omi (GitHub cấm tự approve PR của mình).
+7. Còn lại chạy thẳng, không tốn token: `OMI_CLI status | tree | next | template <type> | new | move | block | audit`.
 
 Template từng loại: `scripts/omi_hub/config/templates.json` (sửa xong chạy lại `init` để sinh lại issue forms).
 Thiết kế: [docs/specs/2026-11-24-omi-hub-design.md](docs/specs/2026-11-24-omi-hub-design.md).
