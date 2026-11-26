@@ -301,7 +301,7 @@ omi-hub/
     ISSUE_TEMPLATE/config.yml   # forms <type>.yml do init sinh từ templates.json
     workflows/omi-audit.yml
   tests/
-    test_domain_*.py, test_application_*.py, test_infrastructure_github.py, test_guard.py, test_doctor.py, test_feedback.py, test_cli_main.py, test_release.py
+    test_domain_*.py, test_application_*.py, test_infrastructure_github.py, test_guard.py, test_doctor.py, test_feedback.py, test_cli_main.py, test_handoff.py, test_release.py
     e2e.sh
   docs/
 ```
@@ -351,6 +351,7 @@ Blocked và rework là quy tắc chung, được `domain/` xử lý, không lặ
 |---|---|
 | `init --repo-dir R [--milestone M] [--test-cmd C] [--lint-cmd C] [--accept-cmd C] [--from-template N] [--template-only]` | Bootstrap (mục 6.1), idempotent; chạy lại sau khi cập nhật plugin (thêm option Status mới, giữ Status của item) |
 | `doctor` | Kiểm workspace sau khi cập nhật plugin: version, `.github/`, settings, config, field/option Status, `OMI_CONFIG`, secret, default branch, ruleset; mỗi mục OK/WARN/FAIL; trước đó gửi lại hàng đợi feedback |
+| `handoff` / `handoff note "<text>"` | Ghi lại mục tự động giữa `<!-- omi:handoff:auto -->` và `<!-- /omi:handoff:auto -->` trong `.omi/HANDOFF.md` (plugin, doctor rút gọn, task đang làm, Ready kế tiếp, Done từ lần trước, Draft/Triage, findings mở của Epic, hàng đợi feedback), giữ phần ngoài marker; xoá ghi chú phiên mà mọi `#n` đã đóng hoặc không có `#n` và cũ hơn 14 ngày. `note`: thêm `- YYYY-MM-DD: text` vào `## Ghi chú phiên`. Lỗi GitHub → `HANDOFF WARN`, không đổi file |
 | `feedback "<tiêu đề>" [--body] [--kind bug\|improve] [--cmd]` | Agent ghi bug/improvement của plugin thành issue ở repo plugin (`repository` trong `plugin.json`), label `omi-feedback`, body có project nguồn, version, lệnh liên quan; trùng title đang mở → comment +1; lỗi gửi → `.omi/feedback-queue.jsonl`, `FEEDBACK QUEUED`, gửi lại ở lần `feedback`/`doctor` sau |
 | `release [--merge]` | Mở (hoặc dùng lại) PR develop→main liệt kê commit, request review team `org-owners`, bật auto-merge (merge commit) nếu được; không có commit mới → `NOTHING`. Mỗi lần chạy đồng bộ team = org owner. `--merge`: có owner org kết luận mới nhất APPROVED và không owner nào CHANGES_REQUESTED thì merge commit (`RELEASED`), không thì `RELEASE WAIT` |
 | `new <type> "title" [--parent N] [--affects N,...] [--milestone M] [--priority P] [--estimate E] [--body-file F] [--field "Mục=nội dung"]... [--blocked-by N]...` | Tạo item, set type, parent, milestone kế thừa, thêm vào Project, set Status khởi tạo. Đã có issue mở cùng type + title → bổ sung phần thiếu (parent, Project, Status), in số cũ, không tạo trùng. `--blocked-by` (lặp lại) gắn quan hệ; khi duyệt Task còn blocker mở vào Waiting |
