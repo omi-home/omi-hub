@@ -84,6 +84,7 @@ def build_parser():
     p = sub.add_parser("review-done")
     p.add_argument("number", type=_num)
     p.add_argument("--fail", help="blocker gộp ≤ 3 dòng → rework")
+    p.add_argument("--improve", action="append", default=[], help="IMPROVE → findings của parent (lặp lại được)")
     return ap
 
 
@@ -119,7 +120,7 @@ def run(a, wf):
     elif a.cmd == "resume":
         pipeline.resume(cfg, wf)
     elif a.cmd == "review-done":
-        pipeline.review_done(cfg, wf, a.number, a.fail)
+        pipeline.review_done(cfg, wf, a.number, a.fail, a.improve)
     elif a.cmd == "new":
         body = (Path(a.body_file).read_text(encoding="utf-8") if a.body_file else
                 fill(load_templates(), a.type, dict(f.split("=", 1) for f in a.field)))

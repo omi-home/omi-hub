@@ -59,6 +59,18 @@ class FakeGh:
     def add_blocked_by(self, cfg, n, db_id):
         self.blockers.setdefault(n, []).append(db_id)
 
+    def marked_comment(self, cfg, n, name):
+        for i, c in reversed(list(enumerate(self.notes.get(n, [])))):
+            if f"<!-- omi:{name} -->" in c:
+                return i, c
+        return None, None
+
+    def upsert_comment(self, cfg, n, cid, body):
+        if cid is None:
+            self.comment(cfg, n, body)
+        else:
+            self.notes[n][cid] = body
+
     def open_dependents(self, cfg, n):
         return [d for d, bs in self.blockers.items() if n in bs and self.issues[d]["state"] == "OPEN"]
 
