@@ -29,5 +29,13 @@ class TestErrors(unittest.TestCase):
         self.assertNotIn("feedback", e)
 
 
+class TestFeedbackArgs(unittest.TestCase):  # #176: --cmd trùng dest subparsers
+    def test_feedback_cmd_option_does_not_redirect(self):
+        for argv, related in ((["feedback", "t", "--cmd", "audit"], "audit"), (["feedback", "t"], None)):
+            with mock.patch.object(cli, "load_cfg", return_value={}),                     mock.patch.object(cli.feedback, "feedback") as fb:
+                self.assertEqual(cli.run(cli.build_parser().parse_args(argv), {}), 0)
+            fb.assert_called_once_with({}, "t", None, "improve", related)
+
+
 if __name__ == "__main__":
     unittest.main()

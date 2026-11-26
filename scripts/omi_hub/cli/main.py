@@ -41,7 +41,7 @@ def build_parser():
     p.add_argument("title")
     p.add_argument("--body")
     p.add_argument("--kind", choices=["bug", "improve"], default="improve")
-    p.add_argument("--cmd", help="lệnh OMI_CLI liên quan")
+    p.add_argument("--cmd", dest="related_cmd", help="lệnh OMI_CLI liên quan")  # dest "cmd" trùng subparsers
     p = sub.add_parser("release")
     p.add_argument("--merge", action="store_true", help="merge PR release nếu owner org đã approve")
     p = sub.add_parser("new")
@@ -136,7 +136,7 @@ def run(a, wf):
             return 0
         return handoff.handoff(cfg, wf)
     if a.cmd == "feedback":
-        feedback.feedback(cfg, a.title, a.body, a.kind, a.cmd)
+        feedback.feedback(cfg, a.title, a.body, a.kind, a.related_cmd)
         return 0
     if a.cmd == "release":
         return release.release(cfg, a.merge)
