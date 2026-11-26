@@ -3,7 +3,7 @@ name: omi-implement
 description: Làm một Task/Bug omi tới Done (start → code → check → submit → review 1 lượt → qa).
 ---
 
-`OMI_CLI` = lệnh ở dòng `OMI_CLI:` đầu phiên. Bạn tự viết và tự sửa code trong phiên này; không giao code cho subagent.
+`OMI_CLI` = lệnh ở dòng `OMI_CLI:` đầu phiên. Issue/GitHub Project chỉ thao tác qua `OMI_CLI`, không gọi `gh issue`/`gh project`/GraphQL trực tiếp (hook hỏi lại); thiếu lệnh → báo người dùng, đề xuất issue omi-hub. Bạn tự viết và tự sửa code trong phiên này; không giao code cho subagent.
 
 1. Đầu phiên đã có dòng `RESUME` → làm theo skill omi-resume. Nếu không: `OMI_CLI start [n]` → `START #n` (hoặc `NONE`: báo và dừng), rồi `OMI_CLI context n`.
 2. `context` có `## Findings mang theo` → làm các finding liên quan tới file đang sửa (không mở rộng phạm vi), nhớ mã `<p>.<i>`.

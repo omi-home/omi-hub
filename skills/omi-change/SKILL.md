@@ -3,7 +3,7 @@ name: omi-change
 description: Tạo và xử lý Change Request (đổi yêu cầu đã Approved) hoặc Bug (lỗi trên item đã Done) trong repo omi.
 ---
 
-`OMI_CLI` = lệnh ở dòng `OMI_CLI:` đầu phiên. Không đọc code trừ khi người dùng yêu cầu.
+`OMI_CLI` = lệnh ở dòng `OMI_CLI:` đầu phiên. Issue/GitHub Project chỉ thao tác qua `OMI_CLI`, không gọi `gh issue`/`gh project`/GraphQL trực tiếp (hook hỏi lại); thiếu lệnh → báo người dùng, đề xuất issue omi-hub. Không đọc code trừ khi người dùng yêu cầu.
 
 ## Change Request
 1. `OMI_CLI new "Change Request" "Thay đổi <đối tượng>: <tóm tắt>" --parent <epic> --affects <a,b> --field "Lý do thay đổi=..." --field "Nội dung thay đổi=<trước → sau>"` (khung đầy đủ: `OMI_CLI template "Change Request"`).
