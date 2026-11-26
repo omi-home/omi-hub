@@ -19,6 +19,9 @@ def check_invariants(wf, item, by_number):
         bad("chưa có trong Project", ("add", wf["types"][t]["initial"]))
         return out
     st = item["status"]
+    if st is None:
+        bad("trong Project nhưng chưa có Status", ("status", wf["types"][t]["initial"]))
+        return out
     if st not in allowed_statuses(wf, t):
         bad(f"status '{st}' không hợp lệ cho {t}")
     parent = by_number.get(item["parent"]) if item["parent"] else None

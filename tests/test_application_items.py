@@ -24,7 +24,7 @@ class FakeGh:
                           "open_blockers": 0, "milestone": "v1", "labels": list(labels)}
 
     def issue_snapshot(self, cfg, n):
-        s = dict(self.issues[n], item_id=f"I{n}")
+        s = dict(self.issues[n], item_id=f"I{n}" if self.issues[n].get("in_project", True) else None)
         s["open_blockers"] += sum(self.issues[b]["state"] == "OPEN" for b in self.blockers.get(n, []))
         p = self.issues.get(s["parent"])
         s["parent"] = {"number": p["number"], "type": p["type"], "status": p["status"]} if p else None
@@ -70,6 +70,17 @@ class FakeGh:
             self.comment(cfg, n, body)
         else:
             self.notes[n][cid] = body
+
+    def open_issue_by_title(self, cfg, title):
+        return next((n for n, i in self.issues.items() if i["title"] == title and i["state"] == "OPEN"), None)
+
+    def add_sub_issue(self, cfg, parent, db_id):
+        self.issues[db_id]["parent"] = parent
+
+    def add_to_project(self, cfg, node_id):
+        n = int(node_id[1:])
+        self.issues[n]["in_project"] = True
+        return f"I{n}"
 
     def open_dependents(self, cfg, n):
         return [d for d, bs in self.blockers.items() if n in bs and self.issues[d]["state"] == "OPEN"]
@@ -170,6 +181,25 @@ class TestFlow(unittest.TestCase):
         items.block(CFG, WF, 4, reason="chờ API", by=3)  # có --reason → Blocked
         self.assertEqual(self.st(4), "Blocked")
         self.assertEqual(items.unblock(CFG, WF, 4), "Waiting")
+
+    def test_ac129_1_new_reuses_open_issue_and_fills_missing(self):
+        self.g.add(1, "Functional Requirement", "Approved")
+        self.g.add(7, "Task", None, body="x")
+        self.g.issues[7].update(title="[Task] Thêm API", in_project=False)
+        self.g.create_issue = mock.Mock(side_effect=AssertionError("không được tạo trùng"))
+        with mock.patch.object(items, "load_templates", return_value={"Task": {"title": {}, "sections": []}}), \
+                mock.patch.object(items, "check_template", return_value=[]), mock.patch("builtins.print"):
+            n = items.new_item(CFG, WF, "Task", "Thêm API", parent=1)
+        self.assertEqual(n, 7)
+        self.assertEqual((self.g.issues[7]["parent"], self.st(7), self.g.issues[7]["in_project"]), (1, "Draft", True))
+
+    def test_ac129_2_move_from_no_status_only_to_initial(self):
+        self.g.add(7, "Task", None)
+        with self.assertRaisesRegex(RuleError, "chỉ chuyển được về 'Draft'"):
+            items.move(CFG, WF, 7, "Ready")
+        with mock.patch("builtins.print"):
+            items.move(CFG, WF, 7, "Draft")
+        self.assertEqual(self.st(7), "Draft")
 
     def test_new_user_story_rejected(self):
         with self.assertRaisesRegex(RuleError, "không còn tạo mới"):

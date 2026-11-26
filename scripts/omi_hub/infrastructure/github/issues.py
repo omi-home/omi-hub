@@ -143,6 +143,14 @@ def repo_issues(cfg):
                            "--json", "number,title,state"]))
 
 
+def open_issue_by_title(cfg, title):
+    """Số issue mở có đúng title (title có prefix loại → cùng type); None nếu chưa có.
+    Dùng list (nhất quán ngay) thay vì search (index trễ) vì mục đích là chống tạo trùng sau lỗi giữa chừng."""
+    out = json.loads(client.run(["issue", "list", "-R", client.repo_full(cfg), "--state", "open", "--limit", "1000",
+                                 "--json", "number,title"]))  # ponytail: ≤1000 issue mở, như repo_issues
+    return next((i["number"] for i in out if i["title"] == title), None)
+
+
 def existing_keys(cfg):
     out = json.loads(client.run(["issue", "list", "-R", client.repo_full(cfg), "--state", "all", "--limit", "1000",
                           "--json", "number,title,body"]))

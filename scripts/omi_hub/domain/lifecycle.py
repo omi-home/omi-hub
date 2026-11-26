@@ -43,6 +43,10 @@ def transition(wf, type_, current, target, blocked_from=None):
     """Trả danh sách guard cần kiểm cho current -> target; RuleError nếu không hợp lệ."""
     if target not in allowed_statuses(wf, type_):
         raise RuleError(f"{type_} không dùng status '{target}'")
+    if current is None:  # item mới vào Project chưa có Status
+        if target != type_def(wf, type_)["initial"]:
+            raise RuleError(f"{type_} chưa có Status: chỉ chuyển được về '{type_def(wf, type_)['initial']}'")
+        return []
     if current == target:
         raise RuleError(f"Item đã ở '{target}'")
     if is_terminal(wf, current):

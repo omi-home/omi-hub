@@ -352,7 +352,7 @@ Blocked và rework là quy tắc chung, được `domain/` xử lý, không lặ
 | `init --repo-dir R [--milestone M] [--test-cmd C] [--lint-cmd C] [--accept-cmd C] [--from-template N] [--template-only]` | Bootstrap (mục 6.1), idempotent; chạy lại sau khi cập nhật plugin (thêm option Status mới, giữ Status của item) |
 | `doctor` | Kiểm workspace sau khi cập nhật plugin: version, `.github/`, settings, config, field/option Status, `OMI_CONFIG`, secret, default branch, ruleset; mỗi mục OK/WARN/FAIL |
 | `release [--merge]` | Mở (hoặc dùng lại) PR develop→main liệt kê commit, request review team `org-owners`, bật auto-merge (merge commit) nếu được; không có commit mới → `NOTHING`. Mỗi lần chạy đồng bộ team = org owner. `--merge`: có owner org kết luận mới nhất APPROVED và không owner nào CHANGES_REQUESTED thì merge commit (`RELEASED`), không thì `RELEASE WAIT` |
-| `new <type> "title" [--parent N] [--affects N,...] [--milestone M] [--priority P] [--estimate E] [--body-file F] [--field "Mục=nội dung"]...` | Tạo item, set type, parent, milestone kế thừa, thêm vào Project, set Status khởi tạo |
+| `new <type> "title" [--parent N] [--affects N,...] [--milestone M] [--priority P] [--estimate E] [--body-file F] [--field "Mục=nội dung"]...` | Tạo item, set type, parent, milestone kế thừa, thêm vào Project, set Status khởi tạo. Đã có issue mở cùng type + title → bổ sung phần thiếu (parent, Project, Status), in số cũ, không tạo trùng |
 | `move N <status> [--reason R]` | Kiểm tra + chuyển + đồng bộ open/closed + rollup; `Ready` khi còn blocked-by mở → `Waiting`; item kết thúc → item Waiting hết blocker về `Ready` |
 | `rework N --reason R` | Mục 4.5 |
 | `block N (--reason R \| --by M)` / `unblock N` | Mục 4.3 Blocked; chỉ `--by` (Task/Bug ở Draft/Triage/Ready) → Waiting; `unblock` về Waiting nếu còn blocker mở |
@@ -362,7 +362,7 @@ Blocked và rework là quy tắc chung, được `domain/` xử lý, không lặ
 | `plan-show PLAN.json` | Validate (quan hệ + template + `blocked_by`, vòng lặp) + in cây plan (key, type, title, số AC, `⛔` phụ thuộc) |
 | `template <type>` | In khung title + body chuẩn của loại (mục 3.6) |
 | `pr-lint N` | Kiểm title + body PR theo template PR (mục 3.7); in `PR OK` hoặc `PR FAIL` + lỗi; PR release (head = develop) bỏ qua |
-| `audit [--fix]` | Kiểm tra bất biến (mục 6.5) |
+| `audit [--fix]` | Kiểm tra bất biến (mục 6.5); `--fix` thêm item thiếu vào Project / item chưa có Status với Status khởi tạo của type. `move` từ chưa có Status chỉ về status khởi tạo |
 | `context N` | In ngữ cảnh gọn cho LLM: issue, AC của parent, item Affects, quy ước test AC, và đúng các mục docs được tham chiếu trong `### Tham chiếu` của issue/parent (`docs/x.md#anchor`, cắt tới heading cùng cấp; thiếu file/mục hoặc ngoài repo → cảnh báo), và `## Findings mang theo`: finding còn mở của parent + tổ tiên, mã `<p>.<i>` |
 | `start [N]` | Chọn `next` nếu không có N; Draft→Ready→In Progress (còn blocked-by mở thì dừng ở Waiting, báo lỗi); checkout branch của issue |
 | `check` | Chạy lần lượt `commands.lint`, `typecheck`, `scan`, `test` (cái nào cấu hình); in `CHECK PASS` hoặc `CHECK FAIL (<bước>)` + 60 dòng cuối |

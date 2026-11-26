@@ -91,6 +91,27 @@ def rollup_up(cfg, wf, snap, trigger):
     rollup_up(cfg, wf, p, new)
 
 
+def _complete(cfg, n, parent, status, priority, estimate):
+    s = gh.issue_snapshot(cfg, n)
+    added = []
+    if parent and not s["parent"]:
+        gh.add_sub_issue(cfg, parent, gh.issue_db_id(cfg, n))
+        added.append(f"parent #{parent}")
+    item = s["item_id"]
+    if not item:
+        item = gh.add_to_project(cfg, s["id"])
+        added.append("Project")
+    if not s["status"]:
+        gh.set_field(cfg, item, "Status", status)
+        added.append(f"Status {status}")
+        if priority:
+            gh.set_field(cfg, item, "Priority", priority)
+        if estimate is not None:
+            gh.set_field(cfg, item, "Estimate", estimate)
+    print(f"#{n} đã có (cùng type + title) → {'bổ sung ' + ', '.join(added) if added else 'đủ, không đổi'}; không tạo trùng")
+    return n
+
+
 def new_item(cfg, wf, type_, title, parent=None, affects=(), milestone=None, priority=None,
             estimate=None, body="", key=None, status=None):
     check_creatable(wf, type_)
@@ -112,6 +133,9 @@ def new_item(cfg, wf, type_, title, parent=None, affects=(), milestone=None, pri
         raise RuleError(errs + [f"Xem khung: `template \"{type_}\"`"])
     for a in affects:
         gh.issue_db_id(cfg, a)  # GhError nếu không tồn tại
+    old = gh.open_issue_by_title(cfg, title)
+    if old:  # lần trước lỗi giữa chừng (hoặc gọi lại): bổ sung phần thiếu, không tạo trùng
+        return _complete(cfg, old, parent, status, priority, estimate)
     issue = gh.create_issue(cfg, title, full, type_, milestone)
     if psnap:
         gh.add_sub_issue(cfg, parent, issue["id"])
