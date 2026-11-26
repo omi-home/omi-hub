@@ -61,8 +61,12 @@ def issue_snapshot(cfg, number):
     return normalize_issue(raw, cfg["project_id"])
 
 
-def create_issue(cfg, title, body, type_, milestone=None):
-    data = {"title": title, "body": body, "type": type_}
+def create_issue(cfg, title, body, type_, milestone=None, labels=None):
+    data = {"title": title, "body": body}
+    if type_:
+        data["type"] = type_
+    if labels:
+        data["labels"] = labels  # GitHub tự tạo label chưa có (cần quyền ghi)
     if milestone:
         data["milestone"] = milestones.milestone_number(cfg, milestone)
     return client.rest("POST", f"{client.repo_path(cfg)}/issues", data)
