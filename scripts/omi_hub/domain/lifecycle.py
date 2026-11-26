@@ -50,6 +50,9 @@ def transition(wf, type_, current, target, blocked_from=None):
     if target == BLOCKED:
         return ["blocker_present"]
     if current == BLOCKED:
+        if blocked_from in ("Ready", WAITING) and target in ("Ready", WAITING):
+            # trước khi block là Ready/Waiting: về Waiting nếu còn blocker mở, về Ready nếu hết
+            return ["has_open_blockers"] if target == WAITING else ["no_open_blockers"]
         if target != blocked_from:
             raise RuleError(f"Unblock chỉ được về trạng thái trước khi block ('{blocked_from}')")
         return ["no_open_blockers"]

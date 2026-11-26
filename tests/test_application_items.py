@@ -53,6 +53,12 @@ class FakeGh:
     def milestone_open_issues(self, cfg, title):
         return sum(1 for i in self.issues.values() if i["milestone"] == title and i["state"] == "OPEN")
 
+    def issue_db_id(self, cfg, n):
+        return n
+
+    def add_blocked_by(self, cfg, n, db_id):
+        self.blockers.setdefault(n, []).append(db_id)
+
     def open_dependents(self, cfg, n):
         return [d for d, bs in self.blockers.items() if n in bs and self.issues[d]["state"] == "OPEN"]
 
@@ -136,6 +142,22 @@ class TestFlow(unittest.TestCase):
         self.g.add(3, "Task", "Ready", parent=None)
         with self.assertRaisesRegex(RuleError, "--reason"):
             items.block(CFG, WF, 3)
+
+    def test_block_by_goes_waiting_then_ready_when_blocker_done(self):  # Bug #119
+        self.g.add(2, "User Story", "Approved")
+        self.g.add(3, "Task", "In QA", parent=2, prs=MERGED)
+        self.g.add(4, "Task", "Ready", parent=2)
+        self.assertEqual(items.block(CFG, WF, 4, by=3), "Waiting")
+        self.assertEqual(self.st(4), "Waiting")
+        items.move(CFG, WF, 3, "Done")
+        self.assertEqual(self.st(4), "Ready")
+
+    def test_unblock_with_open_blocker_goes_waiting(self):  # Bug #119
+        self.g.add(3, "Task", "Ready")
+        self.g.add(4, "Task", "Ready")
+        items.block(CFG, WF, 4, reason="chờ API", by=3)  # có --reason → Blocked
+        self.assertEqual(self.st(4), "Blocked")
+        self.assertEqual(items.unblock(CFG, WF, 4), "Waiting")
 
     def test_new_user_story_rejected(self):
         with self.assertRaisesRegex(RuleError, "không còn tạo mới"):
