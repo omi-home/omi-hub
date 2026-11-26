@@ -14,7 +14,7 @@ from omi_hub.domain.planning import AC_TYPES, pick_next, validate_plan
 from omi_hub.domain.progress import resume_step
 from omi_hub.domain.render import pr_title, render_context, render_plan, render_pr_body, tail
 from omi_hub.domain.security import DEFAULT_SECURITY, needs_security
-from omi_hub.domain.templates import check_pr
+from omi_hub.domain.templates import check_pr, sections
 from omi_hub.domain.text import affected, find_marker
 from omi_hub.infrastructure.github import gateway as gh
 from omi_hub.infrastructure.shell import run_cmd
@@ -172,7 +172,9 @@ def submit(cfg, wf, n, done=None):
         pack.write_text(
             render_context(s, parent, [gh.issue_snapshot(cfg, a) for a in affected(s["body"])])
             + f"\n\n## Diff PR #{pr} ({len(diff)} dòng)\n```diff\n" + "\n".join(diff[:limit])
-            + ("\n... (đã cắt)" if len(diff) > limit else "") + "\n```\n", encoding="utf-8")
+            + ("\n... (đã cắt)" if len(diff) > limit else "") + "\n```\n"
+            + (f"\n## Findings đã có (không báo lại)\n{known}\n" if (known := carried_findings(cfg, parent)) else ""),
+            encoding="utf-8")
         print(f"REVIEW #{n} PR #{pr} pack={pack.as_posix()} reviewers={','.join(reviewers)}")
     else:
         print(f"REVIEW #{n} PR #{pr} reviewers=none")
@@ -308,6 +310,25 @@ def add_findings(cfg, n, texts):
     if added:
         gh.upsert_comment(cfg, p, cid, findings.render(its))
     print(f"FINDINGS #{p} +{added} (bỏ {len(texts) - added} trùng)")
+
+
+def carry(cfg, wf, nums):
+    """Task Draft cũ (gợi ý review kiểu trước) → finding của parent, Task → Cancelled."""
+    for n in nums:
+        s = items.snapshot(cfg, n)
+        if s["type"] != "Task" or s["status"] != "Draft" or not s["parent"]:
+            raise RuleError(f"#{n}: carry chỉ nhận Task Draft có parent (hiện: {s['type']} {s['status']})")
+        title = s["title"].removeprefix("[Task] ").strip()
+        todo = "; ".join(x.strip().lstrip("-*").strip() for x in
+                         sections(s["body"]).get("Việc cần làm", "").splitlines() if x.strip())
+        text = title if not todo or todo.casefold() == title.casefold() else f"{title}: {todo}"
+        p = s["parent"]["number"]
+        cid, body = gh.marked_comment(cfg, p, findings.NAME)
+        its, ok = findings.add(findings.parse(body), text, f"từ #{n}")
+        if ok:
+            gh.upsert_comment(cfg, p, cid, findings.render(its))
+        items.move(cfg, wf, n, "Cancelled", f"Gộp thành finding của #{p} (carry)")
+        print(f"CARRY #{n} → finding #{p}{'' if ok else ' (đã có, bỏ trùng)'}")
 
 
 def review_done(cfg, wf, n, fail=None, improve=()):
