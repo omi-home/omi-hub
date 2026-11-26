@@ -71,6 +71,13 @@ class TestTemplates(unittest.TestCase):
             TPL, "Bug", "[Bug] Giỏ hàng: sai tổng", "### Affects\nkhông có số\n\n### Các bước tái hiện\n1. a\n\n"
                                                    "### Kết quả mong đợi\na\n\n### Kết quả thực tế\nb")))
 
+    def test_ac135_1_nfr_accepts_new_groups(self):
+        for g in ("Observability", "Accessibility", "Capacity"):
+            nfr = (f"### Nhóm\n{g}\n\n### Chỉ số và ngưỡng\nx\n\n### Cách đo\ny\n\n"
+                   "### Acceptance criteria\n- [ ] đạt")
+            self.assertEqual(templates.check_template(
+                TPL, "Non-Functional Requirement", f"[Non-Functional Requirement] {g}: x < 1", nfr), [], g)
+
     def test_fill_builds_valid_task_body(self):
         body = templates.fill(TPL, "Task", {"Việc cần làm": "Thêm API POST /orders"})
         self.assertIn("### Definition of done\n- [ ] Test pass", body)

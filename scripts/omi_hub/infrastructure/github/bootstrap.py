@@ -103,16 +103,20 @@ def load_fields(owner, number):
     return out
 
 
-VIEWS_QUERY = "query($p: ID!) { node(id: $p) { ... on ProjectV2 { views(first: 50) { nodes { name } } } } }"
+VIEWS_QUERY = "query($p: ID!) { node(id: $p) { ... on ProjectV2 { views(first: 50) { nodes { id name } } } } }"
 CREATE_VIEW = """mutation($p: ID!, $name: String!, $layout: ProjectV2ViewLayout!) {
   createProjectV2View(input: {projectId: $p, name: $name, layout: $layout}) { projectV2View { id } } }"""
 FILTER_VIEW = """mutation($v: ID!, $filter: String!) {
   updateProjectV2View(input: {viewId: $v, filter: $filter}) { projectV2View { id } } }"""
+DELETE_VIEW = """mutation($v: ID!) { deleteProjectV2View(input: {viewId: $v}) { clientMutationId } }"""
+DEFAULT_VIEW = "View 1"  # view GitHub tự tạo khi tạo Project
 
 
 def ensure_views(project_id, views):
-    """Tạo view còn thiếu theo tên (layout + filter); group by/sort API chưa hỗ trợ. Trả tên view vừa tạo."""
-    have = {v["name"] for v in client.graphql(VIEWS_QUERY, p=project_id)["node"]["views"]["nodes"]}
+    """Tạo view còn thiếu theo tên (layout + filter), xoá "View 1" mặc định; group by/sort API chưa hỗ trợ.
+    Trả tên view vừa tạo."""
+    nodes = client.graphql(VIEWS_QUERY, p=project_id)["node"]["views"]["nodes"]
+    have = {v["name"] for v in nodes}
     made = []
     for v in views:
         if v["name"] in have:
@@ -122,6 +126,10 @@ def ensure_views(project_id, views):
         if v.get("filter"):
             client.graphql(FILTER_VIEW, v=vid, filter=v["filter"])
         made.append(v["name"])
+    if DEFAULT_VIEW not in {v["name"] for v in views}:
+        for v in nodes:
+            if v["name"] == DEFAULT_VIEW:
+                client.graphql(DELETE_VIEW, v=v["id"])
     return made
 
 
