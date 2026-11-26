@@ -6,7 +6,7 @@ from omi_hub.domain.guards import evaluate_guards
 from omi_hub.domain.lifecycle import BLOCKED, WAITING, allowed_statuses, check_creatable, is_terminal, transition
 from omi_hub.domain.relations import check_links, check_parent, rollup
 from omi_hub.domain.rework import rework as rework_status
-from omi_hub.domain.templates import check_template, with_prefix
+from omi_hub.domain.templates import check_template, replace_section, with_prefix
 from omi_hub.domain.text import affected, build_body, find_marker
 from omi_hub.infrastructure.github import gateway as gh
 
@@ -113,7 +113,7 @@ def _complete(cfg, n, parent, status, priority, estimate):
 
 
 def new_item(cfg, wf, type_, title, parent=None, affects=(), milestone=None, priority=None,
-            estimate=None, body="", key=None, status=None):
+            estimate=None, body="", key=None, status=None, blocked_by=()):
     check_creatable(wf, type_)
     psnap = gh.issue_snapshot(cfg, parent) if parent else None
     check_parent(wf, type_, psnap["type"] if psnap else None)
@@ -133,9 +133,12 @@ def new_item(cfg, wf, type_, title, parent=None, affects=(), milestone=None, pri
         raise RuleError(errs + [f"Xem khung: `template \"{type_}\"`"])
     for a in affects:
         gh.issue_db_id(cfg, a)  # GhError nếu không tồn tại
+    blocker_ids = [gh.issue_db_id(cfg, b) for b in blocked_by]  # kiểm tồn tại trước khi tạo
     old = gh.open_issue_by_title(cfg, title)
     if old:  # lần trước lỗi giữa chừng (hoặc gọi lại): bổ sung phần thiếu, không tạo trùng
-        return _complete(cfg, old, parent, status, priority, estimate)
+        n = _complete(cfg, old, parent, status, priority, estimate)
+        _link_blockers(cfg, n, blocked_by, blocker_ids)
+        return n
     issue = gh.create_issue(cfg, title, full, type_, milestone)
     if psnap:
         gh.add_sub_issue(cfg, parent, issue["id"])
@@ -146,7 +149,37 @@ def new_item(cfg, wf, type_, title, parent=None, affects=(), milestone=None, pri
     if estimate is not None:
         gh.set_field(cfg, item, "Estimate", estimate)
     print(f"#{issue['number']} {type_} '{title}' → {status}")
+    _link_blockers(cfg, issue["number"], blocked_by, blocker_ids)
     return issue["number"]
+
+
+def _link_blockers(cfg, n, nums, ids):
+    """Quan hệ blocked-by; khi duyệt (`move Ready`) Task còn blocker mở tự vào Waiting."""
+    have = set(gh.blocker_numbers(cfg, n)) if nums else set()
+    for b, bid in zip(nums, ids):
+        if b not in have:
+            gh.add_blocked_by(cfg, n, bid)
+            have.add(b)
+    if nums:
+        print(f"#{n} blocked-by " + ", ".join(f"#{b}" for b in nums))
+
+
+def edit_item(cfg, n, fields, cr=None):
+    """Thay mục body theo template; `cr` → comment changelog trỏ Change Request."""
+    s = gh.issue_snapshot(cfg, n)
+    if cr is not None and gh.issue_snapshot(cfg, cr)["type"] != "Change Request":
+        raise RuleError(f"#{cr} không phải Change Request")
+    tpl, body = load_templates(), s["body"]
+    for h, v in fields.items():
+        body = replace_section(tpl, s["type"], body, h, v)
+    errs = check_template(tpl, s["type"], s["title"], body)
+    if errs:
+        raise RuleError(errs + [f"Xem khung: `template \"{s['type']}\"`"])
+    gh.update_body(cfg, n, body)
+    heads = ", ".join(f"`{h}`" for h in fields)
+    if cr is not None:
+        gh.comment(cfg, n, f"📝 Changelog: sửa mục {heads} theo Change Request #{cr}.")
+    print(f"EDITED #{n} {heads}" + (f" (CR #{cr})" if cr is not None else ""))
 
 
 def move(cfg, wf, n, target, reason=None):

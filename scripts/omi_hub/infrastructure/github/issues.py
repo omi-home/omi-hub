@@ -72,6 +72,10 @@ def issue_db_id(cfg, n):
     return client.rest("GET", f"{client.repo_path(cfg)}/issues/{n}")["id"]
 
 
+def update_body(cfg, n, body):
+    client.rest("PATCH", f"{client.repo_path(cfg)}/issues/{n}", {"body": body})
+
+
 def add_sub_issue(cfg, parent_n, child_db_id):
     client.rest("POST", f"{client.repo_path(cfg)}/issues/{parent_n}/sub_issues", {"sub_issue_id": child_db_id})
 

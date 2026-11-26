@@ -44,6 +44,11 @@ def build_parser():
     p.add_argument("--estimate", type=float)
     p.add_argument("--body-file")
     p.add_argument("--field", action="append", default=[], help='"Tên mục=nội dung", lặp lại được')
+    p.add_argument("--blocked-by", type=_num, action="append", default=[], help="issue chặn, lặp lại được")
+    p = sub.add_parser("edit", help="thay mục body theo template")
+    p.add_argument("number", type=_num)
+    p.add_argument("--field", action="append", required=True, help='"Tên mục=nội dung", lặp lại được')
+    p.add_argument("--cr", type=_num, help="Change Request gây ra thay đổi → comment changelog")
     p = sub.add_parser("move")
     p.add_argument("number", type=_num)
     p.add_argument("status")
@@ -133,7 +138,10 @@ def run(a, wf):
     elif a.cmd == "new":
         body = (Path(a.body_file).read_text(encoding="utf-8") if a.body_file else
                 fill(load_templates(), a.type, dict(f.split("=", 1) for f in a.field)))
-        items.new_item(cfg, wf, a.type, a.title, a.parent, a.affects, a.milestone, a.priority, a.estimate, body)
+        items.new_item(cfg, wf, a.type, a.title, a.parent, a.affects, a.milestone, a.priority, a.estimate, body,
+                       blocked_by=a.blocked_by)
+    elif a.cmd == "edit":
+        items.edit_item(cfg, a.number, dict(f.split("=", 1) for f in a.field), a.cr)
     elif a.cmd == "move":
         items.move(cfg, wf, a.number, a.status, a.reason)
     elif a.cmd == "rework":

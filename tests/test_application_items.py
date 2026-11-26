@@ -71,6 +71,12 @@ class FakeGh:
         else:
             self.notes[n][cid] = body
 
+    def blocker_numbers(self, cfg, n):
+        return list(self.blockers.get(n, []))
+
+    def update_body(self, cfg, n, body):
+        self.issues[n]["body"] = body
+
     def open_issue_by_title(self, cfg, title):
         return next((n for n, i in self.issues.items() if i["title"] == title and i["state"] == "OPEN"), None)
 
@@ -200,6 +206,38 @@ class TestFlow(unittest.TestCase):
         with mock.patch("builtins.print"):
             items.move(CFG, WF, 7, "Draft")
         self.assertEqual(self.st(7), "Draft")
+
+    def test_ac129_3_new_blocked_by_links_and_waits_on_approve(self):
+        self.g.add(1, "Functional Requirement", "Approved")
+        self.g.add(4, "Task", "Ready", parent=1)
+        self.g.add(7, "Task", "Draft", parent=1)
+        self.g.issues[7]["title"] = "[Task] Thêm API"
+        with mock.patch.object(items, "load_templates", return_value={"Task": {"title": {}, "sections": []}}), \
+                mock.patch.object(items, "check_template", return_value=[]), mock.patch("builtins.print"):
+            n = items.new_item(CFG, WF, "Task", "Thêm API", parent=1, blocked_by=[4, 4])
+            items.move(CFG, WF, n, "Ready")
+        self.assertEqual((self.g.blockers[7], self.st(7)), ([4], "Waiting"))
+
+    def test_ac129_4_edit_replaces_section_and_logs_cr(self):
+        tpl = {"Task": {"sections": [{"heading": "Việc cần làm"}, {"heading": "Definition of done"}]}}
+        self.g.add(5, "Change Request", "Approved")
+        self.g.add(2, "Task", "Ready", body="### Việc cần làm\ncũ\n- a\n\n### Definition of done\n- [ ] x\n\n"
+                                              "<!-- omi:key=E1.F1.T1 -->")
+        with mock.patch.object(items, "load_templates", return_value=tpl), \
+                mock.patch.object(items, "check_template", return_value=[]) as chk, mock.patch("builtins.print"):
+            items.edit_item(CFG, 2, {"Việc cần làm": "mới"}, cr=5)
+            b = self.g.issues[2]["body"]
+            self.assertEqual(b, "### Việc cần làm\nmới\n\n### Definition of done\n- [ ] x\n\n<!-- omi:key=E1.F1.T1 -->\n")
+            self.assertEqual(chk.call_args[0][3], b)  # kiểm template trên body mới
+            self.assertIn("Change Request #5", self.g.notes[2][-1])
+            with self.assertRaisesRegex(RuleError, "không có mục"):
+                items.edit_item(CFG, 2, {"Không có": "x"})
+            with self.assertRaisesRegex(RuleError, "không phải Change Request"):
+                items.edit_item(CFG, 2, {"Việc cần làm": "x"}, cr=2)
+            chk.return_value = ["Mục sai"]
+            with self.assertRaisesRegex(RuleError, "Mục sai"):
+                items.edit_item(CFG, 2, {"Việc cần làm": "y"})
+        self.assertEqual(self.g.issues[2]["body"], b)  # template sai → không ghi
 
     def test_new_user_story_rejected(self):
         with self.assertRaisesRegex(RuleError, "không còn tạo mới"):
