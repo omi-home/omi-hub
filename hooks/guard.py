@@ -14,10 +14,31 @@ DENY = [
 ASK = [
     (re.compile(r"omi\.py[\"']?\s+move\s+#?\d+\s+[\"']?Approved\b"), "Chốt baseline (Approved) cần người xác nhận"),
     (re.compile(r"omi\.py[\"']?\s+apply\b.*--approve"), "Apply plan với --approve sẽ chốt baseline, cần người xác nhận"),
-]
+] + [(re.compile(rx), f"Repo cài omi-hub: issue/GitHub Project chỉ thao tác qua OMI_CLI — dùng {hint}; "
+                      "thiếu lệnh → báo người dùng, đề xuất issue omi-hub") for rx, hint in [
+    (r"\bgh\s+issue\s+create\b", "`OMI_CLI new <Type> \"<title>\" --parent <n>`"),
+    (r"\bgh\s+issue\s+edit\b", "`OMI_CLI edit <n> --field \"Mục=nội dung\"`"),
+    (r"\bgh\s+issue\s+comment\b.*--edit-last", "`OMI_CLI edit` (nội dung thuộc body issue)"),
+    (r"\bgh\s+issue\s+(delete|transfer)\b", "`OMI_CLI move <n> Cancelled`"),
+    (r"\bgh\s+project\s+(item-add|item-delete|item-archive|field-[\w-]+)\b",
+     "`OMI_CLI audit --fix` / `OMI_CLI move` / `OMI_CLI init`"),
+    (r"\b(addProjectV2ItemById|deleteProjectV2Item)\b", "`OMI_CLI new` / `OMI_CLI audit --fix`"),
+    (r"\baddSubIssue\b", "`OMI_CLI new ... --parent <n>`"),
+    (r"\baddBlockedBy\b", "`OMI_CLI block <n> --by <m>` / `OMI_CLI new ... --blocked-by <m>`"),
+]]
+
+# Nội dung heredoc và giá trị --body/-b chỉ là văn bản, không phải lệnh → bỏ trước khi so mẫu.
+_HEREDOC = re.compile(r"<<-?\s*(['\"]?)(\w+)\1[^\n]*\n.*?^\s*\2\s*$", re.S | re.M)
+_HERESTRING = re.compile(r"@(['\"])\r?\n.*?\r?\n\1@", re.S)  # PowerShell @'...'@
+_BODY = re.compile(r"(--body|-b)(=|\s+)(\"(?:\\.|[^\"\\])*\"|'[^']*'|\S+)")
+
+
+def command_part(command):
+    return _BODY.sub(r"\1", _HERESTRING.sub("@here", _HEREDOC.sub("<<heredoc", command)))
 
 
 def decide(command):
+    command = command_part(command)
     for rx, why in DENY:
         if rx.search(command):
             return "deny", why
@@ -43,6 +64,9 @@ def session_text(plugin_root, cwd, source="startup", run=_run):
     root = _find_root(cwd)  # workspace chứa .omi/ (spec D12)
     head = f'OMI_CLI: python "{script}" | ' + (
         "workspace omi sẵn sàng" if root else "chưa init (OMI_CLI init --repo-dir <repo> từ workspace)")
+    if root:
+        head += ("\nQUY TẮC: issue/GitHub Project chỉ thao tác qua OMI_CLI (không gh issue/project trực tiếp);"
+                 " thiếu lệnh → báo người dùng, đề xuất issue omi-hub")
     if not root or source not in ("startup", "clear"):
         return head
     cur = root / ".omi" / "tmp" / "current"

@@ -412,7 +412,9 @@ CLI tìm `.omi/project.json` từ cwd đi lên (chạy được ở workspace ho
 - **PreToolUse (Bash|PowerShell)**:
   - Chặn (`deny`) `gh issue close|reopen`, `gh project item-edit`, `gh api` có mutation `updateProjectV2ItemFieldValue` khi không đi qua `omi` → thông báo "dùng `omi move`".
   - `ask` khi lệnh là `omi move N Approved` (D7).
-- **SessionStart**: in dòng `OMI_CLI: python "<CLAUDE_PLUGIN_ROOT>/scripts/omi.py"` để skills dùng đường dẫn tuyệt đối; nếu repo có `.omi/project.json` thì nhắc `next`/`tree`, nếu chưa thì gợi ý `OMI_CLI init` — trên 1 dòng. Repo đã init và source là `startup`/`clear`: in thêm context task dở (`.omi/tmp/current`) hoặc `NEXT` (mục 6.3).
+  - `ask` kèm gợi ý lệnh OMI_CLI khi gọi `gh issue create|edit|delete|transfer`, `gh issue comment --edit-last`, `gh project item-add|item-delete|item-archive|field-*`, mutation `addProjectV2ItemById`/`deleteProjectV2Item`/`addSubIssue`/`addBlockedBy` (repo cài plugin chỉ thao tác issue/Project qua OMI_CLI).
+  - Chỉ so mẫu trên phần lệnh: bỏ nội dung heredoc (`<<EOF`), here-string PowerShell (`@'...'@`) và giá trị `--body`/`-b`.
+- **SessionStart**: in dòng `OMI_CLI: python "<CLAUDE_PLUGIN_ROOT>/scripts/omi.py"` để skills dùng đường dẫn tuyệt đối; nếu repo có `.omi/project.json` thì nhắc `next`/`tree`, nếu chưa thì gợi ý `OMI_CLI init` — trên 1 dòng; repo đã init in thêm dòng `QUY TẮC:` (issue/Project chỉ qua OMI_CLI, thiếu lệnh → đề xuất issue omi-hub). Repo đã init và source là `startup`/`clear`: in thêm context task dở (`.omi/tmp/current`) hoặc `NEXT` (mục 6.3).
 
 ### 5.6 Subagents
 
