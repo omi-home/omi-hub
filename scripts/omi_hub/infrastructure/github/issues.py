@@ -76,8 +76,8 @@ def issue_db_id(cfg, n):
     return client.rest("GET", f"{client.repo_path(cfg)}/issues/{n}")["id"]
 
 
-def update_body(cfg, n, body):
-    client.rest("PATCH", f"{client.repo_path(cfg)}/issues/{n}", {"body": body})
+def update_body(cfg, n, body, title=None):
+    client.rest("PATCH", f"{client.repo_path(cfg)}/issues/{n}", {"body": body, **({"title": title} if title else {})})
 
 
 def add_sub_issue(cfg, parent_n, child_db_id):
@@ -166,7 +166,7 @@ def existing_keys(cfg):
     for i in out:
         m = re.search(r"<!-- omi:key=(\S+) -->", i["body"] or "")
         if m:
-            keys[m.group(1)] = {"number": i["number"], "title": i["title"]}
+            keys[m.group(1)] = {"number": i["number"], "title": i["title"], "body": i["body"]}
     return keys
 
 
