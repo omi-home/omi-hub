@@ -4,6 +4,23 @@ from .planning import AC_TYPES
 from .text import MARKER
 
 
+GENERATED = ("-lock.json", ".lock", "/pnpm-lock.yaml", "/packages.lock.json")
+
+
+def filter_diff(diff_lines):
+    """Bỏ khối diff của lockfile/file sinh; trả (dòng còn lại, tên file đã bỏ)."""
+    kept, dropped, skip = [], [], False
+    for line in diff_lines:
+        if line.startswith("diff --git "):
+            name = line.rsplit(" b/", 1)[-1]
+            skip = ("/" + name).endswith(GENERATED)
+            if skip:
+                dropped.append(name)
+        if not skip:
+            kept.append(line)
+    return kept, dropped
+
+
 def tail(text, n=60):
     return "\n".join((text or "").rstrip().splitlines()[-n:])
 
