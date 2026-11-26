@@ -137,4 +137,8 @@ def doctor(cfg):
             except (gh.GhError, KeyError, ValueError) as e:  # không đọc được cũng là lỗi cài đặt
                 failed += 1
                 print(f"FAIL {name}: {str(e).splitlines()[0]} → kiểm `gh auth status` và quyền repo")
+    if not failed:  # hook SessionStart so với version plugin để nhắc chạy lại doctor sau khi cập nhật
+        (root / ".omi").mkdir(exist_ok=True)
+        (root / ".omi" / "doctor.json").write_text(
+            json.dumps({"version": json.loads(PLUGIN_JSON.read_text(encoding="utf-8"))["version"]}), encoding="utf-8")
     return 1 if failed else 0

@@ -17,7 +17,7 @@ Claude Code cũ hơn 2.1.275: `/plugin marketplace add omi-home/omi-hub` rồi `
 ## Dùng (`OMI_CLI` in ở dòng đầu mỗi phiên Claude Code)
 1. Một lần mỗi org: `OMI_CLI init --template-only` → tạo views theo `docs/views.md`.
 2. Mỗi dự án, từ thư mục workspace (repo là thư mục con): `OMI_CLI init --repo-dir <repo> --from-template <số project mẫu> --test-cmd "..." --accept-cmd "..."`, tạo secret `OMI_PROJECT_TOKEN`. `AGENTS.md`, `.claude/`, `.omi/` nằm ở workspace, không vào repo. init gộp `.claude/settings.json` để bật plugin cho mọi người mở workspace.
-   Cập nhật plugin: `claude plugin marketplace update omi-home && claude plugin update omi-hub@omi-home`, khởi động lại, chạy lại `init` rồi `OMI_CLI doctor`.
+   Cập nhật plugin: `claude plugin marketplace update omi-home && claude plugin update omi-hub@omi-home`, khởi động lại, chạy lại `init` rồi `OMI_CLI doctor` (hook SessionStart nhắc `DOCTOR:` khi version đổi mà chưa doctor PASS).
 3. Backlog từ PRD: skill `omi-plan`.
 4. Làm task: skill `omi-implement`; `/clear` giữa các task (hook tự nạp task dở hoặc task kế tiếp; phiên bị ngắt → skill `omi-resume`).
    `.omi/HANDOFF.md` do script ghi (`qa` DONE, Cancelled, hook SessionEnd); ghi chú riêng: `OMI_CLI handoff note "..."` (tự dọn khi mọi `#n` đã đóng hoặc sau 14 ngày).

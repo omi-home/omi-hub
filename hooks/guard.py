@@ -59,6 +59,20 @@ def _find_root(cwd):
     return next((d for d in (p, *p.parents) if (d / ".omi" / "project.json").exists()), None)
 
 
+def doctor_reminder(plugin_root, root):
+    """Version plugin khác version ở lần doctor PASS gần nhất (`.omi/doctor.json`) → nhắc chạy doctor. Không gọi mạng."""
+    try:
+        new = json.loads((Path(plugin_root) / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))["version"]
+    except (OSError, ValueError, KeyError):
+        return ""
+    f = root / ".omi" / "doctor.json"
+    try:
+        old = json.loads(f.read_text(encoding="utf-8")).get("version") if f.exists() else None
+    except ValueError:
+        old = None
+    return "" if old == new else f"\nDOCTOR: plugin {old or '(chưa doctor)'} → {new}, chạy OMI_CLI doctor"
+
+
 def session_text(plugin_root, cwd, source="startup", run=_run):
     """Dòng OMI_CLI; sau startup/clear tự nạp context task đang làm (hoặc task kế tiếp) bằng script."""
     script = Path(plugin_root) / "scripts" / "omi.py"
@@ -66,6 +80,7 @@ def session_text(plugin_root, cwd, source="startup", run=_run):
     head = f'OMI_CLI: python "{script}" | ' + (
         "workspace omi sẵn sàng" if root else "chưa init (OMI_CLI init --repo-dir <repo> từ workspace)")
     if root:
+        head += doctor_reminder(plugin_root, root)
         head += ("\nQUY TẮC: issue/GitHub Project chỉ thao tác qua OMI_CLI (không gh issue/project trực tiếp);"
                  " thiếu lệnh/plugin chạy sai → báo người dùng, ghi `OMI_CLI feedback \"<tóm tắt>\"` (issue omi-hub)")
     if not root or source not in ("startup", "clear"):
