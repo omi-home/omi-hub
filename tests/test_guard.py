@@ -42,6 +42,11 @@ class TestDecide(unittest.TestCase):
             self.assertIsNone(guard.decide(c), c)
         self.assertEqual(guard.decide("cat <<EOF > a\nx\nEOF\ngh issue create -t a")[0], "ask")  # lệnh sau heredoc vẫn bắt
 
+    def test_bug164_body_flag_only_at_token_start(self):
+        self.assertEqual(guard.command_part("x --body 'a' y"), "x --body y")
+        for c in ("web-b gh issue create", "XS-b gh issue create"):  # -b giữa token không phải cờ
+            self.assertEqual(guard.command_part(c), c)
+
     def test_allow_normal(self):
         for c in ["python omi.py move 12 Done", "gh issue view 3", "gh pr create --fill", "git status"]:
             self.assertIsNone(guard.decide(c), c)
