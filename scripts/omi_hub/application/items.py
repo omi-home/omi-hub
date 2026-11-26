@@ -1,4 +1,5 @@
 """Use case vòng đời work item: new, move, rework, block, unblock + rollup lên parent."""
+from omi_hub.application.workspace import tmp_dir
 from omi_hub.config import load_templates
 from omi_hub.domain import findings
 from omi_hub.domain.errors import RuleError
@@ -63,7 +64,15 @@ def escalate_findings(cfg, wf, snap):
     print(f"FINDINGS #{n} → #{p}: {len(open_)}")
 
 
+def task_files(n):
+    """File tạm của task n trong .omi/tmp."""
+    return (f"review-{n}.md", f"qa-{n}.log")
+
+
 def after_terminal(cfg, wf, snap):
+    if cfg.get("_root"):  # Done/Cancelled: dọn file tạm của task
+        for f in task_files(snap["number"]):
+            (tmp_dir(cfg) / f).unlink(missing_ok=True)
     release_dependents(cfg, wf, snap["number"])
     if snap.get("milestone") and gh.milestone_open_issues(cfg, snap["milestone"]) == 0:
         print(f"MILESTONE {snap['milestone']} sẵn sàng release")  # spec §4.6: báo, không tự đóng milestone

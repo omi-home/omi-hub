@@ -22,6 +22,7 @@ from omi_hub.infrastructure.shell import run_cmd
 
 
 CHECK_STEPS = ("lint", "typecheck", "scan", "test")
+TMP_MAX_AGE = 7 * 86400  # giây; file .omi/tmp cũ hơn bị dọn khi start
 LINK_WAIT = (1, 2, 4, 8)  # giây chờ GitHub liên kết PR mới vào issue (closedByPullRequestsReferences)
 
 
@@ -123,8 +124,21 @@ def start(cfg, wf, n=None):
         gh.develop(cfg, n, cwd=repo_dir(cfg))
     tmp_dir(cfg).mkdir(parents=True, exist_ok=True)
     (tmp_dir(cfg) / "current").write_text(str(n), encoding="utf-8")  # hook SessionStart nạp lại context sau /clear
+    pruned = prune_tmp(cfg, n)
+    if pruned:
+        print(f"Đã dọn {pruned} file cũ trong .omi/tmp")
     print(f"START #{n}")
     return n
+
+
+def prune_tmp(cfg, n, now=None):
+    """Xoá file .omi/tmp cũ hơn TMP_MAX_AGE, trừ `current` và file của task n."""
+    keep = {"current", *items.task_files(n)}
+    limit = (now or time.time()) - TMP_MAX_AGE
+    old = [f for f in tmp_dir(cfg).iterdir() if f.is_file() and f.name not in keep and f.stat().st_mtime < limit]
+    for f in old:
+        f.unlink()
+    return len(old)
 
 
 def check(cfg):

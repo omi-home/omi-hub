@@ -1,4 +1,6 @@
+import os
 import re
+import time
 import tempfile
 import unittest
 from pathlib import Path
@@ -385,6 +387,45 @@ class TestPipeline(unittest.TestCase):
         (self.T / "review-3.md").write_text("pack", encoding="utf-8")
         with mock.patch.object(pipeline, "run_cmd", return_value=(0, "")):
             self.assertEqual(pipeline.resume(self.cfg, WF), "review")
+
+    def test_ac142_1_done_or_cancelled_removes_task_files(self):
+        self.g.add(2, "Functional Requirement", "In Progress")
+        self.g.add(3, "Task", "In Review", parent=2, prs=[dict(OPEN_PR)])
+        self.g.add(4, "Task", "Ready", parent=2)
+        self.T.mkdir(parents=True)
+        for f in ("review-3.md", "qa-3.log", "review-4.md", "qa-4.log", "review-5.md"):
+            (self.T / f).write_text("x", encoding="utf-8")
+        with mock.patch.object(pipeline, "run_cmd", return_value=(0, "")), mock.patch("builtins.print") as pr:
+            self.assertEqual(pipeline.qa(self.cfg, WF, 3), 0)
+            items.move(self.cfg, WF, 4, "Cancelled", "không cần")
+        self.assertIn(mock.call("DONE #3"), pr.call_args_list)
+        self.assertEqual(sorted(f.name for f in self.T.iterdir()), ["review-5.md"])
+
+    def test_ac142_2_start_prunes_old_tmp_files(self):
+        self.g.add(2, "Functional Requirement", "Approved")
+        self.g.add(3, "Task", "Ready", parent=2)
+        self.T.mkdir(parents=True)
+        old = time.time() - 8 * 86400
+        for f in ("review-1.md", "qa-1.log", "b51.md", "review-3.md", "current", "fresh.md"):
+            (self.T / f).write_text("x", encoding="utf-8")
+            if f != "fresh.md":
+                os.utime(self.T / f, (old, old))
+        with mock.patch("builtins.print") as pr:
+            pipeline.start(self.cfg, WF, 3)
+        self.assertIn(mock.call("Đã dọn 3 file cũ trong .omi/tmp"), pr.call_args_list)
+        self.assertEqual(sorted(f.name for f in self.T.iterdir()), ["current", "fresh.md", "review-3.md"])
+        with mock.patch("builtins.print") as pr:  # không có gì để dọn → không in
+            pipeline.start(self.cfg, WF, 3)
+        self.assertFalse(any("Đã dọn" in str(c) for c in pr.call_args_list))
+
+    def test_ac142_3_resume_reviewed_task_without_pack_goes_to_qa(self):
+        self.g.add(2, "Functional Requirement", "In Progress")
+        self.g.add(3, "Task", "In Review", parent=2, prs=[dict(OPEN_PR)])
+        self.g.notes[3] = ["<!-- omi:reviewed -->"]
+        self.T.mkdir(parents=True)
+        (self.T / "current").write_text("3", encoding="utf-8")  # gói review-3.md đã bị dọn
+        with mock.patch.object(pipeline, "run_cmd", return_value=(0, "")), mock.patch("builtins.print"):
+            self.assertEqual(pipeline.resume(self.cfg, WF), "qa")
 
     def test_resume_done_task_clears_current(self):
         self.g.add(3, "Task", "Done", state="CLOSED")
