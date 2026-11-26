@@ -19,11 +19,12 @@ class FakeGh:
     GhError = GhError
 
     def __init__(self, cfg, latest=None, variable=None, secrets=("OMI_PROJECT_TOKEN",), default="develop",
-                 ruleset=True, fields=FIELDS):
+                 ruleset=True, fields=FIELDS, views=None):
         self.latest = latest or json.loads(doctor.PLUGIN_JSON.read_text(encoding="utf-8"))["version"]
         self.variable = json.dumps({k: v for k, v in cfg.items() if not k.startswith("_")}) \
             if variable is None else variable
         self.secrets, self.default, self.ruleset, self.fields = set(secrets), default, ruleset, fields
+        self.views = [v["name"] for v in setup.VIEWS] if views is None else views
 
     def remote_json(self, repo, path):
         return {"version": self.latest}
@@ -44,6 +45,9 @@ class FakeGh:
 
     def has_ruleset(self, cfg):
         return self.ruleset
+
+    def view_names(self, project_id):
+        return self.views
 
 
 class TestDoctor(unittest.TestCase):
@@ -71,7 +75,7 @@ class TestDoctor(unittest.TestCase):
     def test_ac94_1_one_line_per_check_and_exit_code(self):
         code, lines = self.run_doctor()
         self.assertEqual(code, 0)
-        self.assertEqual(len(lines), 9)
+        self.assertEqual(len(lines), 10)
         self.assertTrue(all(x.startswith("OK ") for x in lines), lines)
         code, lines = self.run_doctor(secrets=())
         self.assertEqual(code, 1)
@@ -129,6 +133,12 @@ class TestDoctor(unittest.TestCase):
         self.assertIn("omi-hub@omi-home", self.line(lines, "settings.json"))
         self.assertIn("main_branch", self.line(lines, "project.json"))
         self.assertTrue(self.line(lines, "fields").startswith("FAIL"))
+
+    def test_views_missing_or_default_only_warns(self):  # #179
+        names = [v["name"] for v in setup.VIEWS]
+        code, lines = self.run_doctor(views=names[1:] + ["View 1"])
+        self.assertEqual(code, 0)
+        self.assertRegex(self.line(lines, "views"), rf'^WARN views: thiếu view {names[0]}; còn view mặc định "View 1" → ')
 
     def test_ac94_5_github_settings(self):
         code, lines = self.run_doctor(variable="", secrets=(), default="main")
