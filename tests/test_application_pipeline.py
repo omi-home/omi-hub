@@ -6,7 +6,7 @@ from unittest import mock
 
 from support import WF
 from test_application_items import FakeGh
-from omi_hub.application import items, pipeline
+from omi_hub.application import items, pipeline, views
 from omi_hub.domain.errors import RuleError
 
 
@@ -60,6 +60,7 @@ class PipelineGh(FakeGh):
 
 PCFG = {"commands": {"test": "T", "accept": "A {n}"}, "review_max_diff_lines": 100}
 OPEN_PR = {"number": 50, "state": "OPEN", "merged": False}
+MERGED_PR = [{"number": 99, "state": "MERGED", "merged": True}]
 AC1 = "### Acceptance criteria\n- [ ] đăng nhập được"
 
 
@@ -232,6 +233,42 @@ class TestPipeline(unittest.TestCase):
             text = pipeline.context(self.cfg, 3)
         self.assertIn("## Findings mang theo\n- [2.1] Tách hàm parse (từ #4)\n- [1.2] Dọn config (từ #8)", text)
         self.assertNotIn("Đã làm", text)
+
+    def test_ac122_3_submit_findings_marks_done_or_rejects(self):
+        self.g.add(1, "Epic", "In Progress")
+        self.g.add(2, "Functional Requirement", "In Progress", parent=1)
+        self.g.add(3, "Task", "In Progress", parent=2)
+        self.g.notes[1] = ["<!-- omi:findings -->\n\n- [ ] Dọn config (từ #8)"]
+        self.g.notes[2] = ["<!-- omi:findings -->\n\n- [ ] Tách hàm (từ #4)\n- [ ] Đặt tên (từ #4)"]
+        before = {k: list(v) for k, v in self.g.notes.items()}
+        with mock.patch.object(pipeline, "run_cmd", side_effect=AssertionError("không được push")):
+            with self.assertRaisesRegex(RuleError, "2.9"):
+                pipeline.submit(self.cfg, WF, 3, "2.1,2.9")
+        self.assertEqual(self.g.notes, before)  # mã sai → không sửa gì
+        with mock.patch("builtins.print"):
+            pipeline.done_findings(self.cfg, self.g.issue_snapshot(self.cfg, 3), "2.2,1.1")
+        self.assertIn("- [ ] Tách hàm (từ #4)\n- [x] Đặt tên (từ #4) (xong ở #3)", self.g.notes[2][0])
+        self.assertIn("- [x] Dọn config (từ #8) (xong ở #3)", self.g.notes[1][0])
+
+    def test_ac122_4_findings_escalate_then_epic_reports_open(self):
+        self.g.add(1, "Epic", "In Progress")
+        self.g.add(2, "Functional Requirement", "In Progress", parent=1)
+        self.g.add(3, "Task", "In QA", parent=2, prs=MERGED_PR)
+        self.g.notes[2] = ["<!-- omi:findings -->\n\n- [x] Đã làm (xong ở #5)\n- [ ] Tách hàm (từ #4)"]
+        with mock.patch("builtins.print") as pr:
+            items.move(self.cfg, WF, 3, "Done")  # FR → In QA: finding mở chuyển lên Epic
+        self.assertIn("- [x] Tách hàm (từ #4) (chuyển lên #1)", self.g.notes[2][0])
+        self.assertIn("- [ ] Tách hàm (từ #4) (chuyển từ #2)", self.g.notes[1][0])
+        self.assertNotIn("Đã làm", self.g.notes[1][0])
+        with mock.patch("builtins.print") as pr:
+            items.move(self.cfg, WF, 2, "Done")  # FR Done → Epic Done, còn finding
+        self.assertIn("FINDINGS OPEN #1 1", " ".join(str(c) for c in pr.call_args_list))
+        self.g.issues[1]["milestone"] = "v1"
+        with mock.patch.object(views, "gh", self.g):
+            self.g.AUDIT_TITLE = "audit"
+            self.g.project_items = lambda cfg: [dict(i, blockers=[]) for i in self.g.issues.values()]
+            text = views.status(self.cfg, WF)
+        self.assertIn("Findings:\n- [1.1] Tách hàm (từ #4) (chuyển từ #2) (Epic #1 đã xong)", text)
 
     def test_review_done_fail_marks_and_reworks(self):
         self.g.add(2, "User Story", "In Progress")

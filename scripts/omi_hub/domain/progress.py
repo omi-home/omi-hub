@@ -4,7 +4,7 @@ from .planning import pick_next
 ACTIVE = ("In Progress", "In Review", "In QA")
 
 
-def render_status(wf, items, milestone=None):
+def render_status(wf, items, milestone=None, findings=None):
     items = [i for i in items if milestone is None or i["milestone"] == milestone]
     live = [i for i in items if i["status"] != "Cancelled"]
     kids, lines = {}, []
@@ -41,6 +41,8 @@ def render_status(wf, items, milestone=None):
                          for i in live if i["status"] == "Waiting"])
     section("Rework:", [f"- #{i['number']} {i['title']} — {i['rework_count']} lần"
                         for i in live if i.get("rework_count")])
+    section("Findings:", [f"- [{code}] {t} (Epic #{e} đã xong)" for e, codes in sorted((findings or {}).items())
+                          for code, t in codes])
     nxt = pick_next(wf, items)
     lines.append(f"Tiếp theo: #{nxt['number']} {nxt['title']}" if nxt else "Tiếp theo: (không có Task/Bug Ready)")
     return "\n".join(lines)

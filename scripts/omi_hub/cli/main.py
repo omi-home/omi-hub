@@ -68,7 +68,10 @@ def build_parser():
     p.add_argument("--fix", action="store_true")
     p = sub.add_parser("plan-show")
     p.add_argument("plan")
-    for name in ("context", "submit", "qa", "accept", "pr-lint"):
+    p = sub.add_parser("submit")
+    p.add_argument("number", type=_num)
+    p.add_argument("--findings", help="mã <p>.<i>,... đã làm trong task này")
+    for name in ("context", "qa", "accept", "pr-lint"):
         sub.add_parser(name).add_argument("number", type=_num)
     p = sub.add_parser("start")
     p.add_argument("number", type=_num, nargs="?")
@@ -112,7 +115,7 @@ def run(a, wf):
     elif a.cmd == "start":
         pipeline.start(cfg, wf, a.number)
     elif a.cmd == "submit":
-        pipeline.submit(cfg, wf, a.number)
+        pipeline.submit(cfg, wf, a.number, a.findings)
     elif a.cmd == "impact":
         pipeline.impact(cfg, a.number, a.post)
     elif a.cmd == "status":

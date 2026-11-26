@@ -1,4 +1,5 @@
 """Truy vấn chỉ đọc: cây work item, việc tiếp theo. Trả dữ liệu, CLI lo in."""
+from omi_hub.domain import findings
 from omi_hub.domain.errors import RuleError
 from omi_hub.domain.planning import pick_next
 from omi_hub.domain.progress import render_status
@@ -34,4 +35,12 @@ def next_item(cfg, wf):
 
 
 def status(cfg, wf, milestone=None):
-    return render_status(wf, [i for i in gh.project_items(cfg) if i["title"] != gh.AUDIT_TITLE], milestone)
+    its = [i for i in gh.project_items(cfg) if i["title"] != gh.AUDIT_TITLE]
+    # ponytail: 1 lần đọc comment mỗi Epic Done; lọc theo milestone/thời gian nếu số Epic lớn
+    left = {}
+    for e in its:
+        if e["type"] == "Epic" and e["status"] == "Done" and (milestone is None or e["milestone"] == milestone):
+            codes = findings.open_codes(e["number"], findings.parse(gh.marked_comment(cfg, e["number"], findings.NAME)[1]))
+            if codes:
+                left[e["number"]] = codes
+    return render_status(wf, its, milestone, left)
