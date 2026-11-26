@@ -68,6 +68,8 @@ def build_parser():
     p.add_argument("--fix", action="store_true")
     p = sub.add_parser("plan-show")
     p.add_argument("plan")
+    p = sub.add_parser("carry", help="Task Draft cũ → finding của parent, Task → Cancelled")
+    p.add_argument("numbers", type=_num, nargs="+")
     p = sub.add_parser("submit")
     p.add_argument("number", type=_num)
     p.add_argument("--findings", help="mã <p>.<i>,... đã làm trong task này")
@@ -114,6 +116,8 @@ def run(a, wf):
         pipeline.context(cfg, a.number)
     elif a.cmd == "start":
         pipeline.start(cfg, wf, a.number)
+    elif a.cmd == "carry":
+        pipeline.carry(cfg, wf, a.numbers)
     elif a.cmd == "submit":
         pipeline.submit(cfg, wf, a.number, a.findings)
     elif a.cmd == "impact":

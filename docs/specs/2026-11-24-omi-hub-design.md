@@ -26,7 +26,7 @@ Ngoài phạm vi v1: tài khoản cá nhân (không có Issue Types), một Proj
 | D3 | Thực thi rule ở **plugin** (chặn) + **GitHub Action** (audit) | Claude không đi tắt được; sửa tay trên web vẫn được phát hiện |
 | D4 | **1 Project / 1 repo** | Khớp với Milestone (cấp repo) |
 | D5 | Python **stdlib** + subprocess `gh` | Không cần cài đặt; xác thực dùng `gh auth` |
-| D6 | Vòng implement **tự động hoàn toàn** (kể cả merge), phanh an toàn: rework > 3 → Blocked. Review = **code review LLM đúng 1 lượt** + **security review LLM 1 lượt khi script phát hiện** task chạm security; **không có vòng review thứ hai** (script thực thi: chỉ `submit` đầu tiên yêu cầu review); gợi ý cải tiến thành Task Draft, không chặn. QA Task/Bug = **script** (test + CI). Nghiệm thu Story/Functional Requirement/Non-Functional Requirement = **script** (mỗi AC ↔ một test tên `ac<số issue>_<thứ tự>`) | Theo yêu cầu; phanh tránh vòng lặp vô hạn |
+| D6 | Vòng implement **tự động hoàn toàn** (kể cả merge), phanh an toàn: rework > 3 → Blocked. Review = **code review LLM đúng 1 lượt** + **security review LLM 1 lượt khi script phát hiện** task chạm security; **không có vòng review thứ hai** (script thực thi: chỉ `submit` đầu tiên yêu cầu review); gợi ý cải tiến thành **finding** trên comment `<!-- omi:findings -->` của parent (`review-done --improve`), task sau mang theo qua `context` và báo xong bằng `submit --findings`, không chặn. QA Task/Bug = **script** (test + CI). Nghiệm thu Story/Functional Requirement/Non-Functional Requirement = **script** (mỗi AC ↔ một test tên `ac<số issue>_<thứ tự>`) | Theo yêu cầu; phanh tránh vòng lặp vô hạn |
 | D7 | Chốt baseline (`Approved`) cho Epic/Story/Functional Requirement/Non-Functional Requirement/Change Request **luôn do người** | Baseline là cam kết; Change Request chỉ có nghĩa khi baseline do người chốt |
 | D8 | `AGENTS.md` là file hướng dẫn agent duy nhất (Claude Code nạp trực tiếp), **không** tạo `CLAUDE.md` | Theo yêu cầu |
 | D9 | Memory dùng cơ chế gốc: subagent `memory: project` → `.claude/agent-memory/<plugin>-<agent>/` (vd. `omi-hub-omi-reviewer/`) | Không tự chế memory |
@@ -66,7 +66,7 @@ Quy tắc giảm token cố định:
 |---|---|
 | Review LLM tìm thêm vấn đề mới ở mỗi vòng | Review đúng 1 lượt/task; sau khi sửa chỉ chạy lại `check` (script) |
 | Reviewer "khó tính" với lỗi máy bắt được | `check` chạy lint/typecheck/scan/test trước; reviewer bỏ qua phong cách và lỗi công cụ đã bắt |
-| Gợi ý cải tiến bị coi là blocker | Reviewer tách `IMPROVE:`; phiên chính tạo Task Draft cùng parent, task hiện tại đi tiếp |
+| Gợi ý cải tiến bị coi là blocker | Reviewer tách `IMPROVE:`; phiên chính ghi finding vào parent (`review-done --improve`), task hiện tại đi tiếp; Task Draft gợi ý kiểu cũ → `carry` |
 | Security review chung chung | Chỉ khi script phát hiện; checklist cụ thể (injection, authz, secret, crypto, input validation); phải chỉ ra dòng cụ thể |
 | Người sửa không có ngữ cảnh | Cùng phiên vừa viết vừa sửa |
 | Sửa xong vẫn fail | `qa` fail → rework; rework > 3 → Blocked, người quyết |
@@ -367,6 +367,7 @@ Blocked và rework là quy tắc chung, được `domain/` xử lý, không lặ
 | `start [N]` | Chọn `next` nếu không có N; Draft→Ready→In Progress (còn blocked-by mở thì dừng ở Waiting, báo lỗi); checkout branch của issue |
 | `check` | Chạy lần lượt `commands.lint`, `typecheck`, `scan`, `test` (cái nào cấu hình); in `CHECK PASS` hoặc `CHECK FAIL (<bước>)` + 60 dòng cuối |
 | `submit N [--findings p.i,...]` | `--findings`: kiểm mọi mã thuộc finding còn mở của parent/tổ tiên (sai → lỗi, không sửa gì) rồi đánh dấu `[x] ... (xong ở #N)`. Push, tạo PR (`Closes #N`) nếu chưa có, → In Review. Chưa có marker review: ghi gói review `.omi/tmp/review-N.md`, in `REVIEW ... reviewers=code[,security]`. Đã có marker: in `REVIEW ... reviewers=none` |
+| `carry N...` | Task Draft (gợi ý review kiểu cũ) → finding của parent (title + `### Việc cần làm`, bỏ trùng), Task → Cancelled kèm lý do |
 | `review-done N [--fail R] [--improve T]...` | Ghi marker `<!-- omi:reviewed -->` **sau khi** reviewer trả kết quả; `--fail` → rework với lý do R; `--improve` (lặp lại được) → thêm `- [ ] T (từ #N)` vào comment `<!-- omi:findings -->` của parent (bỏ trùng, không tạo issue) |
 | `status [--milestone M]` | Một truy vấn: tỉ lệ Done (item, Task/Bug), theo Epic, đếm theo Status, đang làm, Blocked + lý do, Waiting + issue đang chặn, rework, `Findings:` (finding còn mở của Epic đã Done), task kế tiếp |
 | `resume` | Task dở trong `.omi/tmp/current` + Status + git (dirty, commit chưa merge) + marker review + gói review → `RESUME #n step=<code\|submit\|review\|qa\|blocked\|start\|next>` + gợi ý (+ context) |

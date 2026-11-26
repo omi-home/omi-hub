@@ -270,6 +270,19 @@ class TestPipeline(unittest.TestCase):
             text = views.status(self.cfg, WF)
         self.assertIn("Findings:\n- [1.1] Tách hàm (từ #4) (chuyển từ #2) (Epic #1 đã xong)", text)
 
+    def test_ac122_5_carry_draft_task_into_parent_finding(self):
+        self.g.add(2, "Functional Requirement", "In Progress")
+        self.g.add(5, "Task", "Draft", parent=2, body="### Việc cần làm\n- Tách hàm parse\n- Thêm test rỗng")
+        self.g.add(6, "Task", "Ready", parent=2)
+        with mock.patch("builtins.print"):
+            pipeline.carry(self.cfg, WF, [5])
+        self.assertEqual((self.st(5), self.g.issues[5]["state"]), ("Cancelled", "CLOSED"))
+        self.assertIn("- [ ] #5: Tách hàm parse; Thêm test rỗng (từ #5)",
+                      next(c for c in self.g.notes[2] if "omi:findings" in c))
+        self.assertTrue(any("carry" in c for c in self.g.notes[5]))  # lý do Cancelled
+        with self.assertRaisesRegex(RuleError, "Task Draft"):
+            pipeline.carry(self.cfg, WF, [6])
+
     def test_review_done_fail_marks_and_reworks(self):
         self.g.add(2, "User Story", "In Progress")
         self.g.add(3, "Task", "In Review", parent=2, prs=[dict(OPEN_PR)])

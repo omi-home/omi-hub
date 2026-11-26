@@ -20,6 +20,7 @@ Claude Code cũ hơn 2.1.275: `/plugin marketplace add omi-home/omi-hub` rồi `
    Cập nhật plugin: `claude plugin marketplace update omi-home && claude plugin update omi-hub@omi-home`, khởi động lại, chạy lại `init` rồi `OMI_CLI doctor`.
 3. Backlog từ PRD: skill `omi-plan`.
 4. Làm task: skill `omi-implement`; `/clear` giữa các task (hook tự nạp task dở hoặc task kế tiếp; phiên bị ngắt → skill `omi-resume`).
+   Gợi ý review (`IMPROVE`) không thành Task: `review-done n --improve "..."` ghi vào findings của parent, `context` của task sau hiện `## Findings mang theo`, làm xong báo `submit n --findings <p>.<i>`. Task Draft gợi ý kiểu cũ → `OMI_CLI carry <n>...`.
 5. Change Request/Bug: skill `omi-change`.
 6. Release: PR task vào `develop`; `OMI_CLI release` mở PR develop→main chờ PO approve (có ruleset thì tự merge, không thì `OMI_CLI release --merge`). PO = owner của org (team `org-owners`, tự đồng bộ); tác giả PR không tự approve được.
 7. Còn lại chạy thẳng, không tốn token: `OMI_CLI status | tree | next | template <type> | new | move | block | audit | doctor` (doctor: kiểm workspace sau cập nhật plugin, FAIL kèm cách sửa).
