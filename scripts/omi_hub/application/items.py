@@ -198,7 +198,7 @@ def move(cfg, wf, n, target, reason=None):
     snap = snapshot(cfg, n)
     if snap["status"] == target:
         # Built-in workflow của Project (Item closed / PR merged) có thể đã set Done trước: chỉ chạy rollup.
-        print(f"#{n} đã ở '{target}', chỉ chạy rollup")
+        print(f"#{n} đã ở '{target}' (workflow tự động của Project đã chuyển), chỉ chạy rollup")
         if is_terminal(wf, target):
             after_terminal(cfg, wf, snap)
         rollup_up(cfg, wf, snap, target)
