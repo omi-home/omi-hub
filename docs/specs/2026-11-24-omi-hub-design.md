@@ -301,7 +301,7 @@ omi-hub/
     ISSUE_TEMPLATE/config.yml   # forms <type>.yml do init sinh từ templates.json
     workflows/omi-audit.yml
   tests/
-    test_domain_*.py, test_application_*.py, test_infrastructure_github.py, test_guard.py, test_doctor.py, test_feedback.py, test_release.py
+    test_domain_*.py, test_application_*.py, test_infrastructure_github.py, test_guard.py, test_doctor.py, test_feedback.py, test_cli_main.py, test_release.py
     e2e.sh
   docs/
 ```
