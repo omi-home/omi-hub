@@ -30,7 +30,7 @@ ASK = [
 # Nội dung heredoc và giá trị --body/-b chỉ là văn bản, không phải lệnh → bỏ trước khi so mẫu.
 _HEREDOC = re.compile(r"<<-?\s*(['\"]?)(\w+)\1[^\n]*\n.*?^\s*\2\s*$", re.S | re.M)
 _HERESTRING = re.compile(r"@(['\"])\r?\n.*?\r?\n\1@", re.S)  # PowerShell @'...'@
-_BODY = re.compile(r"(--body|-b)(=|\s+)(\"(?:\\.|[^\"\\])*\"|'[^']*'|\S+)")
+_BODY = re.compile(r"(?<!S)(--body|-b)(=|\s+)(\"(?:\\.|[^\"\\])*\"|'[^']*'|\S+)")
 
 
 def command_part(command):
