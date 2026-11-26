@@ -335,7 +335,11 @@ def resume(cfg, wf):
                              reviewed, (tmp_dir(cfg) / f"review-{n}.md").exists())
     if step == "next":
         cur.unlink(missing_ok=True)
+        handoff.clear_wip(cfg)
     print(f"RESUME #{n} status={s['status']} step={step}\n{hint.replace('<n>', str(n))}")
+    wip = handoff.wip_text(cfg) if step != "next" else None
+    if wip:
+        print(f"\n## Checkpoint phiên trước\n{wip}")
     if step in ("code", "submit"):
         print()
         context(cfg, n)

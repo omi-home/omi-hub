@@ -91,3 +91,38 @@ def prune_notes(doc, closed, today, max_age=NOTE_MAX_AGE):
                 continue
         keep.append(line)
     return "\n".join(lines[:a] + keep + lines[b:]), removed
+
+
+WIP = ("<!-- omi:handoff:wip -->", "<!-- /omi:handoff:wip -->")
+INTENT = "- Ý định: "
+
+
+def drop_block(doc, marks):
+    b, e = marks
+    i, j = doc.find(b), doc.find(e)
+    if not 0 <= i < j:
+        return doc
+    return (doc[:i].rstrip("\n") + "\n\n" + doc[j + len(e):].lstrip("\n")).strip("\n") + "\n"
+
+
+def wip_intent(doc):
+    return next((x[len(INTENT):] for x in (get_block(doc, WIP) or "").splitlines() if x.startswith(INTENT)), None)
+
+
+def set_intent(doc, text, now):
+    """`handoff note --wip`: ghi đè dòng ý định trong checkpoint (chưa có checkpoint thì tạo mục chỉ có ý định)."""
+    lines = [x for x in (get_block(doc, WIP) or f"_Checkpoint lúc {now}_").splitlines() if not x.startswith(INTENT)]
+    return put_block(doc, WIP, "\n".join(lines + [INTENT + " ".join(text.split())]))
+
+
+def render_wip(n, branch, step, last_commit, status, shortstat, check, last_cmd, intent, now):
+    changed = [f"  {x}" for x in status.splitlines()[:15]] + (["  ..."] if len(status.splitlines()) > 15 else [])
+    return "\n".join([
+        f"_Checkpoint tự động sau mỗi tool call lúc {now} — `OMI_CLI resume` in lại mục này._",
+        f"- Task: #{n} · nhánh `{branch or '?'}` · bước: {step}",
+        f"- Commit cuối: {last_commit or '(không rõ)'}",
+        "- Chưa commit:" + ("\n" + "\n".join(changed) + (f"\n  ({shortstat.strip()})" if shortstat.strip() else "")
+                            if changed else " (sạch)"),
+        f"- Check gần nhất: {check or '(chưa chạy)'}",
+        f"- Lệnh cuối: {last_cmd or '(không rõ)'}",
+    ] + ([INTENT + intent] if intent else []))

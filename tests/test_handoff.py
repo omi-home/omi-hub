@@ -102,6 +102,18 @@ class TestHandoff(unittest.TestCase):
         for s in ("còn #3 #4", "chung chung mới", "#99 ngoài project"):
             self.assertIn(s, doc)
 
+    def test_ac144_6_note_wip_overwrites_intent(self):
+        with mock.patch("builtins.print"):
+            handoff.note(self.cfg, "sửa parser, bước kế: chạy test", wip=True)
+            handoff.note(self.cfg, "chạy   test dài", wip=True)
+        wip = hd.get_block(self.f.read_text(encoding="utf-8"), hd.WIP)
+        self.assertEqual([x for x in wip.splitlines() if x.startswith(hd.INTENT)], [hd.INTENT + "chạy test dài"])
+
+    def test_ac144_7_handoff_without_current_drops_wip(self):
+        self.f.write_text(hd.put_block("# HANDOFF\n", hd.WIP, "- Task: #7"), encoding="utf-8")
+        self.run_h()
+        self.assertIsNone(hd.get_block(self.f.read_text(encoding="utf-8"), hd.WIP))
+
 
 if __name__ == "__main__":
     unittest.main()

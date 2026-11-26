@@ -93,6 +93,44 @@ class TestSession(unittest.TestCase):
                 self.assertEqual(run.call_args.args[0][-1], "handoff")
                 self.assertEqual(Path(run.call_args.kwargs["cwd"]).resolve(), Path(d).resolve())
 
+    def _ws(self, d, current="7"):
+        (Path(d) / ".omi" / "tmp").mkdir(parents=True)
+        (Path(d) / ".omi" / "project.json").write_text('{"repo_dir": "repo"}', encoding="utf-8")
+        if current:
+            (Path(d) / ".omi" / "tmp" / "current").write_text(current, encoding="utf-8")
+        (Path(d) / ".omi" / "tmp" / "check-last.txt").write_text("CHECK FAIL (test)\nboom", encoding="utf-8")
+
+    def test_ac144_5_post_hook_writes_local_checkpoint(self):
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+        from omi_hub.domain import handoff as hd
+        out = {"status": " M src/a.py\n?? src/b.py", "rev-parse": "7-task-x", "log": "abc123 #7: parser",
+               "diff": " 1 file changed, 3 insertions(+)"}
+        calls = []
+
+        def run(cmds, cwd):
+            calls.extend(cmds)
+            return [next(v for k, v in out.items() if k in args) for args in cmds]
+
+        with tempfile.TemporaryDirectory() as d:
+            self._ws(d)
+            f = Path(d) / ".omi" / "HANDOFF.md"
+            f.write_text("# HANDOFF\nghi tay\n" + "\n".join(hd.WIP[:1] + (hd.INTENT + "đang sửa parser",) + hd.WIP[1:]),
+                         encoding="utf-8")
+            data = {"tool_name": "Bash", "tool_input": {"command": "python -m unittest\n  -q"}}
+            self.assertTrue(guard.checkpoint(Path(d), data, run, now="2026-11-26 10:00:00"))
+            doc = f.read_text(encoding="utf-8")
+            wip = hd.get_block(doc, hd.WIP)
+            for s in ("- Task: #7 · nhánh `7-task-x` · bước: code", "- Commit cuối: abc123 #7: parser",
+                      "   M src/a.py", "  ?? src/b.py", "(1 file changed, 3 insertions(+))",
+                      "- Check gần nhất: CHECK FAIL (test)", "- Lệnh cuối: Bash: python -m unittest -q",
+                      hd.INTENT + "đang sửa parser"):
+                self.assertIn(s, wip)
+            self.assertIn("ghi tay", doc)
+            self.assertTrue(all(a[0] == "git" for a in calls))  # chỉ git cục bộ, không gh/mạng
+            (Path(d) / ".omi" / "tmp" / "current").unlink()
+            self.assertFalse(guard.checkpoint(Path(d), data, run))  # không có task dở → không ghi
+            self.assertEqual(f.read_text(encoding="utf-8"), doc)
+
     def test_ac137_1_session_prints_omi_cli_rule_when_init(self):
         with tempfile.TemporaryDirectory() as d:
             (Path(d) / ".omi").mkdir()
