@@ -28,9 +28,9 @@
     ]
   },
   "Non-Functional Requirement": {
-    "title": {"pattern": "^(Performance|Security|Reliability|Usability|Maintainability|Compliance): .+$", "example": "Performance: p95 API đặt hàng < 300ms ở 100 RPS", "hint": "<Nhóm>: <chỉ số> <ngưỡng>"},
+    "title": {"pattern": "^(Performance|Security|Reliability|Usability|Maintainability|Compliance|Observability|Accessibility|Capacity): .+$", "example": "Performance: p95 API đặt hàng < 300ms ở 100 RPS", "hint": "<Nhóm>: <chỉ số> <ngưỡng>"},
     "sections": [
-      {"heading": "Nhóm", "required": true, "options": ["Performance", "Security", "Reliability", "Usability", "Maintainability", "Compliance"]},
+      {"heading": "Nhóm", "required": true, "options": ["Performance", "Security", "Reliability", "Usability", "Maintainability", "Compliance", "Observability", "Accessibility", "Capacity"]},
       {"heading": "Chỉ số và ngưỡng", "required": true, "hint": "Ví dụ: p95 < 300ms ở 100 RPS"},
       {"heading": "Cách đo", "required": true, "hint": "Công cụ/lệnh đo và môi trường"},
       {"heading": "Acceptance criteria", "required": true, "default": "- [ ] ", "checklist": true, "hint": "Mỗi dòng kiểm chứng được bằng test; không tự động được thì ghi [manual]"},

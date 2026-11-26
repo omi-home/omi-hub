@@ -135,7 +135,7 @@ Nguồn duy nhất: `scripts/omi_hub/config/templates.json`. Từ đó script **
 | Epic | ≥ 5 ký tự · "Quản lý đơn hàng" | ★Mục tiêu · ★Phạm vi · Ngoài phạm vi · Chỉ số thành công |
 | User Story | `<vai trò> có thể <hành động>` · "Khách hàng có thể theo dõi đơn hàng" | ★Story (`Là ..., tôi muốn ... để ...`) · ★Acceptance criteria (checklist) · Ghi chú |
 | Functional Requirement | `Hệ thống phải\|cần <hành vi>` hoặc `<vai trò> có thể <hành động>` · "Hệ thống phải gửi email xác nhận đơn" | ★Mô tả · Story (`Là ..., tôi muốn ... để ...`) · ★Acceptance criteria (checklist) · Ràng buộc |
-| Non-Functional Requirement | `<Nhóm>: <chỉ số> <ngưỡng>` · "Performance: p95 API đặt hàng < 300ms ở 100 RPS" | ★Nhóm (Performance/Security/Reliability/Usability/Maintainability/Compliance) · ★Chỉ số và ngưỡng · ★Cách đo · ★Acceptance criteria |
+| Non-Functional Requirement | `<Nhóm>: <chỉ số> <ngưỡng>` · "Performance: p95 API đặt hàng < 300ms ở 100 RPS" | ★Nhóm (Performance/Security/Reliability/Usability/Maintainability/Compliance/Observability/Accessibility/Capacity) · ★Chỉ số và ngưỡng · ★Cách đo · ★Acceptance criteria |
 | Change Request | `Thay đổi <đối tượng>: <tóm tắt>` · "Thay đổi thanh toán: hỗ trợ trả góp" | ★Lý do thay đổi · ★Nội dung thay đổi · ★Affects (`#n`) · Ảnh hưởng dự kiến |
 | Task | ≥ 5 ký tự, `<động từ> <đối tượng>` · "Thêm API POST /orders" | ★Việc cần làm · ★Definition of done (checklist) · Ghi chú kỹ thuật |
 | Bug | `<thành phần>: <triệu chứng>` · "Giỏ hàng: tổng tiền sai khi áp mã giảm giá" | ★Affects (`#n`) · Môi trường · ★Các bước tái hiện · ★Kết quả mong đợi · ★Kết quả thực tế |
@@ -430,7 +430,7 @@ Chạy từ thư mục workspace: `OMI_CLI init --repo-dir <repo>`. Tham số th
 
 1. Kiểm tra: `gh auth` có scope `project, repo, admin:org`; repo (trong `--repo-dir`) thuộc org.
 2. Tạo Issue Types còn thiếu (REST `/orgs/{org}/issue-types`).
-3. Tạo Project mới (hoặc `gh project copy` từ Project mẫu khi có `--from-template`; copy không mang workflow `Auto-add to project`) và tạo 5 view mục 3.4 bằng API (`createProjectV2View` + filter; group by/sort phải chỉnh tay). Nếu đã có Project gắn repo với tiêu đề chuẩn → dùng lại.
+3. Tạo Project mới (hoặc `gh project copy` từ Project mẫu khi có `--from-template`; copy không mang workflow `Auto-add to project`) và tạo 5 view mục 3.4 bằng API (`createProjectV2View` + filter; group by/sort phải chỉnh tay), xoá view "View 1" GitHub tự tạo (`deleteProjectV2View`). Nếu đã có Project gắn repo với tiêu đề chuẩn → dùng lại.
 4. Link Project với repo; đảm bảo field Priority/Estimate/Rework Count/Blocked Reason và đủ option Status (tạo bù nếu thiếu).
 5. Built-in workflows: không có API. Plugin tự thêm item vào Project (`add_to_project`), không phụ thuộc Auto-add; `init` in hướng dẫn bật Auto-add trên UI nếu muốn. Item closed → không đổi (plugin tự quản Done/Cancelled).
 6. Workspace: ghi `.omi/project.json`, `AGENTS.md` (merge mục omi nếu file đã có). Repo: issue forms, PR template, workflow audit. Repo variable `OMI_CONFIG` = config (cho Action). Label `security`.
