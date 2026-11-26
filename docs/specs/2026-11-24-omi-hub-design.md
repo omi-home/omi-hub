@@ -395,6 +395,7 @@ CLI tìm `.omi/project.json` từ cwd đi lên (chạy được ở workspace ho
 **Workspace** — `.omi/project.json`: owner, repo, `repo_dir`, `default_branch` (develop), `main_branch`, project number, project node id, field id và option id (cache để khỏi tra mỗi lần), và:
   - `commands`: `{"lint": "...", "typecheck": "...", "scan": "gitleaks detect --no-banner && semgrep --error -q", "test": "...", "accept": "pytest -k ac{n}_ -rA"}` (lệnh shell của dự án, cái nào bỏ trống thì bỏ qua; `{n}` = số issue nghiệm thu).
   - `security_paths`: danh sách regex đường dẫn file kích hoạt security review (mặc định: auth, login, password, secret, token, crypto, permission, acl, session, `\.env`, sql).
+  - `ci_infra_patterns`: danh sách regex log CI coi là lỗi hạ tầng (mặc định: `Input required and not supplied`, `Bad credentials`, `Resource not accessible by integration`, HTTP 5xx). Khớp → `qa` in `QA INFRA <đoạn khớp>`, không rework, giữ status.
   - `review_max_diff_lines`: cắt diff trong gói review (mặc định 1500).
 - `.omi/tmp/`: gói review, log QA, `current` (task đang làm).
 - `.omi/plans/*.json`: các plan đã sinh từ PRD (giữ làm lịch sử).
@@ -458,6 +459,7 @@ Một agent (phiên chính) làm trọn task:
    - Có `BLOCKER` → `review-done N --fail "<blocker gộp>"` (ghi nhận + rework) → tự sửa (cùng ngữ cảnh) → `check` → `submit N` (lần này `reviewers=none`, không review lại).
 5. `qa N` →
    - `QA FAIL #N log=<file>` → script đã rework; đọc log, sửa, `check`, `submit N`, `qa N`.
+   - `QA INFRA <lý do>` → lỗi hạ tầng CI (secret/input/GitHub 5xx), không rework: báo người dùng sửa cấu hình hoặc chạy lại `qa N`.
    - `DONE #N` → kèm các dòng rollup và `ACCEPT PASS|FAIL #p` nếu parent vào In QA.
 6. Báo 1 dòng. Người dùng muốn làm tiếp: gõ `/clear` rồi `tiếp`.
 
