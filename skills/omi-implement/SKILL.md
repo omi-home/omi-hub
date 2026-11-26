@@ -7,7 +7,7 @@ description: Làm một Task/Bug omi tới Done (start → code → check → su
 
 1. Đầu phiên đã có dòng `RESUME` → làm theo skill omi-resume. Nếu không: `OMI_CLI start [n]` → `START #n` (hoặc `NONE`: báo và dừng), rồi `OMI_CLI context n`.
 2. `context` có `## Findings mang theo` → làm các finding liên quan tới file đang sửa (không mở rộng phạm vi), nhớ mã `<p>.<i>`.
-   TDD: test trước (Bug: test tái hiện; AC của parent #p: test tên chứa `ac<p>_<i>`), rồi code. Chỉ đọc file cần thiết. Lặp `OMI_CLI check` tới `CHECK PASS`. Commit `#n: <tóm tắt>`.
+   TDD: test trước (Bug: test tái hiện; AC của parent #p: test tên chứa `ac<p>_<i>`), rồi code. Chỉ đọc file cần thiết. Lặp `OMI_CLI check` tới `CHECK PASS` (`CHECK WARN` = chưa có test-cmd, báo người dùng). Commit `#n: <tóm tắt>`.
 3. `OMI_CLI submit n [--findings <p>.<i>,...]` (mã finding đã làm ở bước 2) → `REVIEW #n PR #pr pack=<f> reviewers=<...>`.
 4. Nếu `reviewers` khác `none`: gọi song song subagent `omi-hub:omi-reviewer` và (nếu có `security`) `omi-hub:omi-security-reviewer`, prompt đúng một dòng `Pack: <f>`.
    - Mỗi `IMPROVE:` → thêm `--improve "<gợi ý>"` vào lệnh `review-done` bên dưới (script ghi vào findings của parent, task sau mang theo). Không làm trong task này; chỉ tạo Task riêng (`OMI_CLI new Task`) khi gợi ý vượt phạm vi Epic.

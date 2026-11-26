@@ -219,6 +219,29 @@ class TestPipeline(unittest.TestCase):
             self.assertEqual(pipeline.submit(self.cfg, WF, 3), (50, []))
         self.assertEqual(self.st(3), "In Review")
 
+    def test_ac132_1_check_warns_without_test_cmd(self):
+        with mock.patch.object(pipeline, "run_cmd", return_value=(0, "")), mock.patch("builtins.print") as pr:
+            self.assertEqual(pipeline.check(dict(self.cfg, commands={"lint": "L"})), 0)
+        pr.assert_called_once_with("CHECK WARN: chưa cấu hình commands.test")
+
+    def test_ac132_3_submit_first_time_prints_one_review_line(self):
+        self.g.add(2, "User Story", "In Progress")
+        self.g.add(3, "Task", "In Progress", parent=2)
+        self.g.link_lag = 2
+        with mock.patch.object(pipeline, "run_cmd", return_value=(0, "omi/3-x")), \
+                mock.patch.object(pipeline.time, "sleep"), mock.patch("builtins.print") as pr:
+            pipeline.submit(self.cfg, WF, 3)
+        lines = [str(c.args[0]) for c in pr.call_args_list if c.args]
+        self.assertEqual(len([x for x in lines if x.startswith("REVIEW #3 PR #50")]), 1, lines)
+
+    def test_ac132_3_cli_stdout_line_buffered(self):
+        from omi_hub.cli import main as cli
+        out = mock.Mock()
+        with mock.patch.object(cli.sys, "stdout", out), mock.patch.object(cli.sys, "stderr", mock.Mock()), \
+                mock.patch.object(cli, "run", return_value=0):
+            cli.main(["check"])
+        out.reconfigure.assert_called_once_with(encoding="utf-8", line_buffering=True)
+
     def test_qa_pass_merges_done_and_accepts_parent(self):
         self.g.add(1, "Epic", "In Progress")
         self.g.add(2, "User Story", "In Progress", parent=1, body=AC1)
