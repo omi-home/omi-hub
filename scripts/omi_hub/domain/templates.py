@@ -63,6 +63,19 @@ def check_pr(pr_tpl, title, body):
     return errs + _check_sections(pr_tpl["sections"], body)
 
 
+def replace_section(tpl, type_, body, heading, value):
+    """Thay nội dung mục `### heading`; chưa có thì chèn trước marker omi (hoặc cuối body)."""
+    if heading not in {s["heading"] for s in tpl[type_]["sections"]}:
+        raise RuleError(f"{type_} không có mục: {heading}")
+    block = f"### {heading}\n{value.strip()}\n\n"
+    pat = re.compile(rf"^### {re.escape(heading)}[ \t]*\n.*?(?=^### |^<!-- omi:|\Z)", re.M | re.S)
+    if pat.search(body or ""):
+        return pat.sub(lambda _: block, body, count=1).rstrip() + "\n"
+    m = re.search(r"^<!-- omi:", body or "", re.M)
+    i = m.start() if m else len(body or "")
+    return ((body or "")[:i].rstrip() + "\n\n" + block + (body or "")[i:]).strip() + "\n"
+
+
 def fill(tpl, type_, fields):
     """Dựng body từ {heading: value}; mục không truyền mà có default thật (placeholder=false) dùng default."""
     unknown = set(fields) - {s["heading"] for s in tpl[type_]["sections"]}
