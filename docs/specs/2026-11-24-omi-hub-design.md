@@ -398,7 +398,7 @@ CLI tìm `.omi/project.json` từ cwd đi lên (chạy được ở workspace ho
   - `security_paths`: danh sách regex đường dẫn file kích hoạt security review (mặc định: auth, login, password, secret, token, crypto, permission, acl, session, `\.env`, sql).
   - `ci_infra_patterns`: danh sách regex log CI coi là lỗi hạ tầng (mặc định: `Input required and not supplied`, `Bad credentials`, `Resource not accessible by integration`, HTTP 5xx). Khớp → `qa` in `QA INFRA <đoạn khớp>`, không rework, giữ status.
   - `review_max_diff_lines`: cắt diff trong gói review (mặc định 1500).
-- `.omi/tmp/`: gói review, log QA, `current` (task đang làm).
+- `.omi/tmp/`: gói review, log QA, `current` (task đang làm). Task Done/Cancelled → xoá `review-N.md`, `qa-N.log`; `start` xoá file cũ hơn 7 ngày (trừ `current` và file của task đang làm). `resume` dựa vào marker review trên GitHub nên vẫn đúng khi gói đã bị dọn.
 - `.omi/plans/*.json`: các plan đã sinh từ PRD (giữ làm lịch sử).
 - `AGENTS.md`: quy trình làm việc cho agent (từ template), có mục omi tóm tắt lifecycle và lệnh.
 
@@ -415,7 +415,7 @@ CLI tìm `.omi/project.json` từ cwd đi lên (chạy được ở workspace ho
   - `ask` khi lệnh là `omi move N Approved` (D7).
   - `ask` kèm gợi ý lệnh OMI_CLI khi gọi `gh issue create|edit|delete|transfer`, `gh issue comment --edit-last`, `gh project item-add|item-delete|item-archive|field-*`, mutation `addProjectV2ItemById`/`deleteProjectV2Item`/`addSubIssue`/`addBlockedBy` (repo cài plugin chỉ thao tác issue/Project qua OMI_CLI).
   - Chỉ so mẫu trên phần lệnh: bỏ nội dung heredoc (`<<EOF`), here-string PowerShell (`@'...'@`) và giá trị `--body`/`-b`.
-- **SessionStart**: in dòng `OMI_CLI: python "<CLAUDE_PLUGIN_ROOT>/scripts/omi.py"` để skills dùng đường dẫn tuyệt đối; nếu repo có `.omi/project.json` thì nhắc `next`/`tree`, nếu chưa thì gợi ý `OMI_CLI init` — trên 1 dòng; repo đã init in thêm dòng `QUY TẮC:` (issue/Project chỉ qua OMI_CLI, thiếu lệnh → đề xuất issue omi-hub). Repo đã init và source là `startup`/`clear`: in thêm context task dở (`.omi/tmp/current`) hoặc `NEXT` (mục 6.3).
+- **SessionStart**: in dòng `OMI_CLI: python "<CLAUDE_PLUGIN_ROOT>/scripts/omi.py"` để skills dùng đường dẫn tuyệt đối; nếu repo có `.omi/project.json` thì nhắc `next`/`tree`, nếu chưa thì gợi ý `OMI_CLI init` — trên 1 dòng; repo đã init in thêm dòng `QUY TẮC:` (issue/Project chỉ qua OMI_CLI; thiếu lệnh/plugin chạy sai → `OMI_CLI feedback`). Repo đã init và source là `startup`/`clear`: in thêm context task dở (`.omi/tmp/current`) hoặc `NEXT` (mục 6.3).
 
 ### 5.6 Subagents
 
