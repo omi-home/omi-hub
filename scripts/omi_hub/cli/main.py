@@ -164,7 +164,8 @@ def run(a, wf):
 
 def main(argv=None):
     if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8")
+        # line_buffering: bị kill giữa chừng (timeout) vẫn giữ các dòng đã in, vd REVIEW của submit
+        sys.stdout.reconfigure(encoding="utf-8", line_buffering=True)
         sys.stderr.reconfigure(encoding="utf-8")
     a = build_parser().parse_args(argv)
     try:

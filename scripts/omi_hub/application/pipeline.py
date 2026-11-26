@@ -136,8 +136,9 @@ def check(cfg):
                 _save_check(cfg, msg)
                 print(msg)
                 return 1
-    _save_check(cfg, "CHECK PASS")
-    print("CHECK PASS")
+    msg = "CHECK PASS" if cfg.get("commands", {}).get("test") else "CHECK WARN: chưa cấu hình commands.test"
+    _save_check(cfg, msg)
+    print(msg)
     return 0
 
 
