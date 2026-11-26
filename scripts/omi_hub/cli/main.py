@@ -163,7 +163,8 @@ def run(a, wf):
     elif a.cmd == "edit":
         items.edit_item(cfg, a.number, dict(f.split("=", 1) for f in a.field), a.cr)
     elif a.cmd == "move":
-        items.move(cfg, wf, a.number, a.status, a.reason)
+        if items.move(cfg, wf, a.number, a.status, a.reason) == "Cancelled":
+            pipeline.auto_handoff(cfg, wf)
     elif a.cmd == "rework":
         items.rework(cfg, wf, a.number, a.reason)
     elif a.cmd == "block":

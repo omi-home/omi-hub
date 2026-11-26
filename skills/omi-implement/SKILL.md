@@ -19,4 +19,4 @@ description: Làm một Task/Bug omi tới Done (start → code → check → su
    - `QA INFRA <lý do>` → lỗi hạ tầng CI, không rework: báo người dùng, sửa cấu hình xong chạy lại `qa n`.
    - `status=Blocked` → dừng, báo người dùng (vượt 3 lần rework).
    - `DONE #n`. Nếu có `ACCEPT FAIL #p` với AC tự động → `OMI_CLI new Task "Đạt AC<i> của #p" --parent p --field "Việc cần làm=<nội dung AC>"`, `move` Ready, báo người dùng. AC `[manual]` → nhắc người dùng tick.
-6. Báo một dòng: `#n Done · PR #pr · rework k · task mới: ...` và nhắc: "Gõ `/clear` rồi `tiếp` — hook tự nạp task kế tiếp".
+6. `qa`/`move ... Cancelled` tự cập nhật `.omi/HANDOFF.md` (không sửa tay mục tự động); chỉ ghi điều không suy ra được từ GitHub bằng `OMI_CLI handoff note "<text>"`. Báo một dòng: `#n Done · PR #pr · rework k · task mới: ...` và nhắc: "Gõ `/clear` rồi `tiếp` — hook tự nạp task kế tiếp".

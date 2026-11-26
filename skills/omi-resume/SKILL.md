@@ -13,3 +13,4 @@ description: "Tiếp tục task omi còn dở của phiên trước (tạm dừn
    - `qa`: `OMI_CLI qa n` → bước 5 của omi-implement.
    - `blocked`: báo người dùng lý do, dừng.
    - `start` / `next`: chạy omi-implement từ bước 1.
+3. `qa`/`move ... Cancelled` tự cập nhật `.omi/HANDOFF.md` (không sửa tay mục tự động); chỉ ghi điều không suy ra được từ GitHub bằng `OMI_CLI handoff note "<text>"`.

@@ -80,6 +80,19 @@ class TestSession(unittest.TestCase):
             self.assertIn("NEXT: #8", guard.session_text(Path("/plug"), Path(d), "clear", lambda a, c: "#8 [Task] Y"))
             self.assertEqual(len(guard.session_text(Path("/plug"), Path(d), "resume", fake).splitlines()), 2)
 
+    def test_ac144_4_session_end_runs_handoff_and_swallows_errors(self):
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / ".omi").mkdir()
+            (Path(d) / ".omi" / "project.json").write_text("{}", encoding="utf-8")
+            for err in (None, guard.subprocess.TimeoutExpired("x", 50)):
+                with mock.patch.object(guard.sys, "argv", ["guard.py", "end"]), \
+                        mock.patch.object(guard.Path, "cwd", return_value=Path(d)), \
+                        mock.patch.object(guard.subprocess, "run", side_effect=err) as run:
+                    guard.main()  # không ném lỗi
+                self.assertEqual(run.call_args.args[0][-1], "handoff")
+                self.assertEqual(Path(run.call_args.kwargs["cwd"]).resolve(), Path(d).resolve())
+
     def test_ac137_1_session_prints_omi_cli_rule_when_init(self):
         with tempfile.TemporaryDirectory() as d:
             (Path(d) / ".omi").mkdir()
