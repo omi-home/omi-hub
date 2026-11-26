@@ -8,6 +8,7 @@ from omi_hub.application.workspace import repo_dir, tmp_dir
 from omi_hub.config import load_pr_template, load_templates
 from omi_hub.domain.acceptance import accept_verdict, parse_ac
 from omi_hub.domain.docs import doc_refs, render_refs, section
+from omi_hub.domain import findings
 from omi_hub.domain.errors import RuleError
 from omi_hub.domain.planning import AC_TYPES, pick_next, validate_plan
 from omi_hub.domain.progress import resume_step
@@ -59,8 +60,20 @@ def context(cfg, n):
     text = render_context(s, parent, [gh.issue_snapshot(cfg, a) for a in affected(s["body"])])
     docs = doc_context(cfg, [s["body"]] + ([parent["body"]] if parent else []))
     text += f"\n\n{docs}" if docs else ""
+    carried = carried_findings(cfg, parent)
+    text += f"\n\n## Findings mang theo\n{carried}" if carried else ""
     print(text)
     return text
+
+
+def carried_findings(cfg, anc):
+    """Finding còn mở của parent và mọi tổ tiên, mỗi dòng có mã `<p>.<i>`."""
+    lines = []
+    while anc:
+        _, body = gh.marked_comment(cfg, anc["number"], findings.NAME)
+        lines += [f"- [{code}] {t}" for code, t in findings.open_codes(anc["number"], findings.parse(body))]
+        anc = gh.issue_snapshot(cfg, anc["parent"]["number"]) if anc["parent"] else None
+    return "\n".join(lines)
 
 
 def start(cfg, wf, n=None):
@@ -257,8 +270,26 @@ def resume(cfg, wf):
     return step
 
 
-def review_done(cfg, wf, n, fail=None):
+def add_findings(cfg, n, texts):
+    """IMPROVE của review #n → comment findings của parent (không tạo issue mới)."""
+    s = gh.issue_snapshot(cfg, n)
+    if not s["parent"]:
+        raise RuleError(f"#{n} không có parent để ghi findings")
+    p = s["parent"]["number"]
+    cid, body = gh.marked_comment(cfg, p, findings.NAME)
+    its, added = findings.parse(body), 0
+    for t in texts:
+        its, ok = findings.add(its, t, n)
+        added += ok
+    if added:
+        gh.upsert_comment(cfg, p, cid, findings.render(its))
+    print(f"FINDINGS #{p} +{added} (bỏ {len(texts) - added} trùng)")
+
+
+def review_done(cfg, wf, n, fail=None, improve=()):
     """Ghi nhận review 1 lượt SAU khi reviewer trả kết quả (resume dựa vào marker này); FAIL → rework."""
+    if improve:
+        add_findings(cfg, n, improve)
     gh.comment(cfg, n, f"<!-- omi:reviewed -->\n🔎 Review 1 lượt: {'FAIL — ' + fail if fail else 'PASS'}")
     if fail:
         items.rework(cfg, wf, n, f"Review: {fail}")

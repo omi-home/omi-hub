@@ -208,6 +208,31 @@ class TestPipeline(unittest.TestCase):
             self.assertEqual(pipeline.accept(self.cfg, WF, 2), 1)
         self.assertEqual(self.st(2), "In Progress")
 
+    def test_ac122_1_review_done_improve_appends_findings_to_parent(self):
+        self.g.add(2, "Functional Requirement", "In Progress")
+        self.g.add(3, "Task", "In Review", parent=2, prs=[dict(OPEN_PR)])
+        n_issues = len(self.g.issues)
+        with mock.patch("builtins.print"):
+            pipeline.review_done(self.cfg, WF, 3, improve=["Tách hàm parse", "Đặt tên rõ hơn"])
+            pipeline.review_done(self.cfg, WF, 3, improve=["tách hàm  parse", "Thêm log lỗi"])
+        found = [c for c in self.g.notes[2] if "omi:findings" in c]
+        self.assertEqual(len(found), 1)  # một comment, sửa tại chỗ
+        self.assertIn("- [ ] Tách hàm parse (từ #3)\n- [ ] Đặt tên rõ hơn (từ #3)\n- [ ] Thêm log lỗi (từ #3)",
+                      found[0])
+        self.assertEqual(found[0].count("parse"), 1)
+        self.assertEqual(len(self.g.issues), n_issues)  # không tạo issue mới
+
+    def test_ac122_2_context_lists_open_findings_of_ancestors(self):
+        self.g.add(1, "Epic", "In Progress")
+        self.g.add(2, "Functional Requirement", "In Progress", parent=1)
+        self.g.add(3, "Task", "In Progress", parent=2)
+        self.g.notes[1] = ["<!-- omi:findings -->\n\n- [x] Đã làm (xong ở #9)\n- [ ] Dọn config (từ #8)"]
+        self.g.notes[2] = ["<!-- omi:findings -->\n\n- [ ] Tách hàm parse (từ #4)"]
+        with mock.patch("builtins.print"):
+            text = pipeline.context(self.cfg, 3)
+        self.assertIn("## Findings mang theo\n- [2.1] Tách hàm parse (từ #4)\n- [1.2] Dọn config (từ #8)", text)
+        self.assertNotIn("Đã làm", text)
+
     def test_review_done_fail_marks_and_reworks(self):
         self.g.add(2, "User Story", "In Progress")
         self.g.add(3, "Task", "In Review", parent=2, prs=[dict(OPEN_PR)])

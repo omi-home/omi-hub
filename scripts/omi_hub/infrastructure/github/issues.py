@@ -99,9 +99,28 @@ def comment(cfg, n, body):
     client.rest("POST", f"{client.repo_path(cfg)}/issues/{n}/comments", {"body": body})
 
 
-def comments(cfg, n):
+def _comment_objs(cfg, n):
     pages = json.loads(client.run(["api", "--paginate", "--slurp", f"{client.repo_path(cfg)}/issues/{n}/comments?per_page=100"]))
-    return [c["body"] for page in pages for c in page]
+    return [c for page in pages for c in page]
+
+
+def comments(cfg, n):
+    return [c["body"] for c in _comment_objs(cfg, n)]
+
+
+def marked_comment(cfg, n, name):
+    """(id, body) của comment mới nhất chứa marker `<!-- omi:<name> -->`; (None, None) nếu chưa có."""
+    for c in reversed(_comment_objs(cfg, n)):
+        if f"<!-- omi:{name} -->" in (c["body"] or ""):
+            return c["id"], c["body"]
+    return None, None
+
+
+def upsert_comment(cfg, n, cid, body):
+    if cid:
+        client.rest("PATCH", f"{client.repo_path(cfg)}/issues/comments/{cid}", {"body": body})
+    else:
+        comment(cfg, n, body)
 
 
 def close(cfg, n, reason):

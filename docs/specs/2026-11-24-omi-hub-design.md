@@ -363,11 +363,11 @@ Blocked và rework là quy tắc chung, được `domain/` xử lý, không lặ
 | `template <type>` | In khung title + body chuẩn của loại (mục 3.6) |
 | `pr-lint N` | Kiểm title + body PR theo template PR (mục 3.7); in `PR OK` hoặc `PR FAIL` + lỗi; PR release (head = develop) bỏ qua |
 | `audit [--fix]` | Kiểm tra bất biến (mục 6.5) |
-| `context N` | In ngữ cảnh gọn cho LLM: issue, AC của parent, item Affects, quy ước test AC, và đúng các mục docs được tham chiếu trong `### Tham chiếu` của issue/parent (`docs/x.md#anchor`, cắt tới heading cùng cấp; thiếu file/mục hoặc ngoài repo → cảnh báo) |
+| `context N` | In ngữ cảnh gọn cho LLM: issue, AC của parent, item Affects, quy ước test AC, và đúng các mục docs được tham chiếu trong `### Tham chiếu` của issue/parent (`docs/x.md#anchor`, cắt tới heading cùng cấp; thiếu file/mục hoặc ngoài repo → cảnh báo), và `## Findings mang theo`: finding còn mở của parent + tổ tiên, mã `<p>.<i>` |
 | `start [N]` | Chọn `next` nếu không có N; Draft→Ready→In Progress (còn blocked-by mở thì dừng ở Waiting, báo lỗi); checkout branch của issue |
 | `check` | Chạy lần lượt `commands.lint`, `typecheck`, `scan`, `test` (cái nào cấu hình); in `CHECK PASS` hoặc `CHECK FAIL (<bước>)` + 60 dòng cuối |
 | `submit N` | Push, tạo PR (`Closes #N`) nếu chưa có, → In Review. Chưa có marker review: ghi gói review `.omi/tmp/review-N.md`, in `REVIEW ... reviewers=code[,security]`. Đã có marker: in `REVIEW ... reviewers=none` |
-| `review-done N [--fail R]` | Ghi marker `<!-- omi:reviewed -->` **sau khi** reviewer trả kết quả; `--fail` → rework với lý do R |
+| `review-done N [--fail R] [--improve T]...` | Ghi marker `<!-- omi:reviewed -->` **sau khi** reviewer trả kết quả; `--fail` → rework với lý do R; `--improve` (lặp lại được) → thêm `- [ ] T (từ #N)` vào comment `<!-- omi:findings -->` của parent (bỏ trùng, không tạo issue) |
 | `status [--milestone M]` | Một truy vấn: tỉ lệ Done (item, Task/Bug), theo Epic, đếm theo Status, đang làm, Blocked + lý do, Waiting + issue đang chặn, rework, task kế tiếp |
 | `resume` | Task dở trong `.omi/tmp/current` + Status + git (dirty, commit chưa merge) + marker review + gói review → `RESUME #n step=<code\|submit\|review\|qa\|blocked\|start\|next>` + gợi ý (+ context) |
 | `qa N` | → In QA, chờ `gh pr checks --watch` (PR không có CI thì chạy `commands.test`, có CI thì không chạy trùng); fail → rework + log `.omi/tmp/qa-N.log`; pass → merge squash → Done → rollup → `accept` parent nếu parent vào In QA |
