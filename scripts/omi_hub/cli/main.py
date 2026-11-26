@@ -88,7 +88,9 @@ def build_parser():
     sub.add_parser("resume")
     p = sub.add_parser("review-done")
     p.add_argument("number", type=_num)
-    p.add_argument("--fail", help="blocker gộp ≤ 3 dòng → rework")
+    g = p.add_mutually_exclusive_group()
+    g.add_argument("--fail", help="blocker gộp ≤ 3 dòng → rework")
+    g.add_argument("--override", help="bác BLOCKER sai (sau khi người dùng xác nhận): PASS kèm lý do, không rework")
     p.add_argument("--improve", action="append", default=[], help="IMPROVE → findings của parent (lặp lại được)")
     return ap
 
@@ -127,7 +129,7 @@ def run(a, wf):
     elif a.cmd == "resume":
         pipeline.resume(cfg, wf)
     elif a.cmd == "review-done":
-        pipeline.review_done(cfg, wf, a.number, a.fail, a.improve)
+        pipeline.review_done(cfg, wf, a.number, a.fail, a.improve, a.override)
     elif a.cmd == "new":
         body = (Path(a.body_file).read_text(encoding="utf-8") if a.body_file else
                 fill(load_templates(), a.type, dict(f.split("=", 1) for f in a.field)))

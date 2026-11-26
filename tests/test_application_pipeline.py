@@ -321,6 +321,17 @@ class TestPipeline(unittest.TestCase):
         with self.assertRaisesRegex(RuleError, "Task Draft"):
             pipeline.carry(self.cfg, WF, [6])
 
+    def test_ac126_4_review_done_override_passes_with_reason(self):
+        self.g.add(2, "Functional Requirement", "In Progress")
+        self.g.add(3, "Task", "In Review", parent=2, prs=[dict(OPEN_PR)])
+        with mock.patch("builtins.print"):
+            pipeline.review_done(self.cfg, WF, 3, override="reviewer đọc nhầm, đã có test ở x_test.py")
+        self.assertEqual((self.st(3), self.g.issues[3]["rework_count"]), ("In Review", 0))
+        self.assertTrue(any("omi:reviewed" in c and "bác BLOCKER" in c and "đọc nhầm" in c for c in self.g.notes[3]))
+        self.assertTrue(any("bác BLOCKER" in c and "đọc nhầm" in c for c in self.g.notes[50]))  # comment PR
+        with self.assertRaisesRegex(RuleError, "loại trừ"):
+            pipeline.review_done(self.cfg, WF, 3, fail="x", override="y")
+
     def test_review_done_fail_marks_and_reworks(self):
         self.g.add(2, "User Story", "In Progress")
         self.g.add(3, "Task", "In Review", parent=2, prs=[dict(OPEN_PR)])

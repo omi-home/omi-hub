@@ -12,6 +12,7 @@ description: Làm một Task/Bug omi tới Done (start → code → check → su
 4. Nếu `reviewers` khác `none`: gọi song song subagent `omi-hub:omi-reviewer` và (nếu có `security`) `omi-hub:omi-security-reviewer`, prompt đúng một dòng `Pack: <f>`.
    - Mỗi `IMPROVE:` → thêm `--improve "<gợi ý>"` vào lệnh `review-done` bên dưới (script ghi vào findings của parent, task sau mang theo). Không làm trong task này; chỉ tạo Task riêng (`OMI_CLI new Task`) khi gợi ý vượt phạm vi Epic.
    - Không có `BLOCKER:` → `OMI_CLI review-done n [--improve "..."]...`.
+   - `BLOCKER:` có vẻ sai (đọc nhầm diff, đã có test...) → báo người dùng kèm bằng chứng; **chỉ khi người dùng xác nhận** mới `OMI_CLI review-done n --override "<lý do>"` (PASS, không rework). Không tự override.
    - Có `BLOCKER:` → `OMI_CLI review-done n --fail "<blocker gộp ≤ 3 dòng>" [--improve "..."]...` (script ghi nhận + rework) → sửa → `check` → `submit n` (lần này `reviewers=none`, không review lại).
 5. `OMI_CLI qa n`:
    - `QA FAIL ... log=<f> status=In Progress` → đọc log, sửa, `check`, `submit n`, `qa n`.
