@@ -1,6 +1,7 @@
 import contextlib
 import io
 import json
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -75,6 +76,22 @@ class TestDoctor(unittest.TestCase):
         code, lines = self.run_doctor(secrets=())
         self.assertEqual(code, 1)
         self.assertRegex(self.line(lines, "secret"), r"^FAIL secret: .+ → .+")
+
+    def test_ac132_4_session_reminds_doctor_on_version_change(self):
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "hooks"))
+        import guard
+        plugin = doctor.PLUGIN_JSON.parents[1]
+        ver = json.loads(doctor.PLUGIN_JSON.read_text(encoding="utf-8"))["version"]
+        (self.ws / ".omi").mkdir(exist_ok=True)
+        (self.ws / ".omi" / "project.json").write_text("{}", encoding="utf-8")
+        self.assertIn(f"DOCTOR: plugin (chưa doctor) → {ver}, chạy OMI_CLI doctor",
+                      guard.session_text(plugin, self.ws, "resume"))
+        self.run_doctor(secrets=())  # FAIL → không ghi version
+        self.assertFalse((self.ws / ".omi" / "doctor.json").exists())
+        self.run_doctor()  # PASS → ghi version, hết nhắc
+        self.assertNotIn("DOCTOR:", guard.session_text(plugin, self.ws, "resume"))
+        (self.ws / ".omi" / "doctor.json").write_text('{"version": "0.0.1"}', encoding="utf-8")
+        self.assertIn(f"DOCTOR: plugin 0.0.1 → {ver}", guard.session_text(plugin, self.ws, "resume"))
 
     def test_ac94_1_ruleset_missing_only_warns(self):
         code, lines = self.run_doctor(ruleset=False)
