@@ -355,7 +355,7 @@ Blocked và rework là quy tắc chung, được `domain/` xử lý, không lặ
 | `new <type> "title" [--parent N] [--affects N,...] [--milestone M] [--priority P] [--estimate E] [--body-file F] [--field "Mục=nội dung"]...` | Tạo item, set type, parent, milestone kế thừa, thêm vào Project, set Status khởi tạo |
 | `move N <status> [--reason R]` | Kiểm tra + chuyển + đồng bộ open/closed + rollup; `Ready` khi còn blocked-by mở → `Waiting`; item kết thúc → item Waiting hết blocker về `Ready` |
 | `rework N --reason R` | Mục 4.5 |
-| `block N (--reason R \| --by M)` / `unblock N` | Mục 4.3 Blocked |
+| `block N (--reason R \| --by M)` / `unblock N` | Mục 4.3 Blocked; chỉ `--by` (Task/Bug ở Draft/Triage/Ready) → Waiting; `unblock` về Waiting nếu còn blocker mở |
 | `tree [N]` | In cây item kèm status, `⛔ #n` cho blocked-by đang mở |
 | `next` | Task/Bug Ready, ưu tiên cao nhất, milestone sớm nhất, không bị chặn |
 | `apply PLAN.json [--approve]` | Tạo cây từ plan, idempotent theo `omi:key`; tạo quan hệ `blocked_by` còn thiếu, Task Ready còn blocker mở → Waiting |

@@ -83,6 +83,8 @@ class TestBlocked(unittest.TestCase):
                          ["no_open_blockers"])
         with self.assertRaisesRegex(RuleError, "trước khi block"):
             lifecycle.transition(WF, "Task", "Blocked", "In Progress", blocked_from="Ready")
+        self.assertEqual(lifecycle.transition(WF, "Task", "Blocked", "Waiting", blocked_from="Ready"),
+                         ["has_open_blockers"])  # Bug #119
 
 
 class TestRuleError(unittest.TestCase):

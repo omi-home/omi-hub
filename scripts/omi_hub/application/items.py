@@ -147,6 +147,16 @@ def block(cfg, wf, n, reason=None, by=None):
     snap = snapshot(cfg, n)
     if by:
         gh.add_blocked_by(cfg, n, gh.issue_db_id(cfg, by))
+        if snap["status"] == WAITING:
+            print(f"#{n} đã ở {WAITING}, thêm blocker #{by}")
+            return WAITING
+        if not reason and snap["status"] != BLOCKED and WAITING in allowed_statuses(wf, snap["type"]):
+            try:
+                transition(wf, snap["type"], snap["status"], WAITING)
+            except RuleError:
+                pass
+            else:  # phụ thuộc đã lên kế hoạch → Waiting (script tự ra khi blocker xong), không Blocked
+                return move(cfg, wf, n, WAITING)
         snap["open_blockers"] += 1
         reason = reason or f"blocked by #{by}"
     guards = transition(wf, snap["type"], snap["status"], BLOCKED)
@@ -154,6 +164,7 @@ def block(cfg, wf, n, reason=None, by=None):
     if errs:
         raise RuleError(errs)
     apply_status(cfg, wf, snap, BLOCKED, reason)
+    return BLOCKED
 
 
 def unblock(cfg, wf, n):
@@ -163,4 +174,5 @@ def unblock(cfg, wf, n):
     prev = find_marker(gh.comments(cfg, n), "blocked-from")
     if not prev or prev is True:
         raise RuleError(f"#{n}: không tìm thấy marker blocked-from, dùng `move` với status mong muốn")
-    move(cfg, wf, n, prev)
+    # Ready/Waiting → xin Ready, move tự rẽ sang Waiting nếu còn blocker mở
+    return move(cfg, wf, n, "Ready" if prev == WAITING else prev)
