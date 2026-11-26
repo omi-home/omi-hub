@@ -112,6 +112,10 @@ DELETE_VIEW = """mutation($v: ID!) { deleteProjectV2View(input: {viewId: $v}) { 
 DEFAULT_VIEW = "View 1"  # view GitHub tự tạo khi tạo Project
 
 
+def view_names(project_id):
+    return [v["name"] for v in client.graphql(VIEWS_QUERY, p=project_id)["node"]["views"]["nodes"]]
+
+
 def ensure_views(project_id, views):
     """Tạo view còn thiếu theo tên (layout + filter), xoá "View 1" mặc định; group by/sort API chưa hỗ trợ.
     Trả tên view vừa tạo."""

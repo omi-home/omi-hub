@@ -105,6 +105,15 @@ def check_ruleset(cfg):
                    f"{INIT}; không có ruleset thì chỉ merge release bằng `OMI_CLI release --merge`")
 
 
+def check_views(cfg):
+    have = gh.view_names(cfg["project_id"])
+    missing = [v["name"] for v in setup.VIEWS if v["name"] not in have]
+    extra = [v for v in have if v == "View 1"]  # view GitHub tự tạo, init xoá
+    if missing or extra:
+        raise Warn("; ".join(filter(None, [missing and f"thiếu view {', '.join(missing)}",
+                                            extra and 'còn view mặc định "View 1"'])), INIT)
+
+
 def doctor(cfg):
     root = Path(cfg.get("_root", "."))
     sp = root / ".claude" / "settings.json"
@@ -123,7 +132,8 @@ def doctor(cfg):
                   ("OMI_CONFIG", lambda: check_variable(cfg)),
                   ("secret", lambda: check_secret(cfg)),
                   ("default branch", lambda: check_branch(cfg)),
-                  ("ruleset", lambda: check_ruleset(cfg))]
+                  ("ruleset", lambda: check_ruleset(cfg)),
+                  ("views", lambda: check_views(cfg))]
         failed = 0
         for name, fn in checks:
             try:
