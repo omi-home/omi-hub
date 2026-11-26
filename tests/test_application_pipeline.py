@@ -146,6 +146,44 @@ class TestPipeline(unittest.TestCase):
         self.assertIn("+x = 1", (self.T / "review-3.md").read_text(encoding="utf-8"))
         self.assertFalse(any("omi:reviewed" in c for c in self.g.notes.get(3, [])))  # marker do review-done ghi
 
+    def _pack126(self):
+        self.g.add(2, "Functional Requirement", "In Progress", body=AC1)
+        self.g.add(3, "Task", "In Progress", parent=2)
+        self.g.add(4, "Task", "Ready", parent=2)
+        self.g.add(5, "Task", "Done", parent=2, state="CLOSED")
+        self.g.notes[2] = ["<!-- omi:findings -->\n\n- [ ] Tách hàm (từ #4)"]
+        self.g.pr_diff = lambda cfg, pr: "\n".join([
+            "diff --git a/src/a.py b/src/a.py", "+x = 1",
+            "diff --git a/package-lock.json b/package-lock.json", *["+lock"] * 50,
+            "diff --git a/web/pnpm-lock.yaml b/web/pnpm-lock.yaml", "+y"])
+        with mock.patch.object(pipeline, "run_cmd", return_value=(1, "boom\nAssertionError: x")), \
+                mock.patch("builtins.print"):
+            pipeline.check(dict(self.cfg, commands={"test": "T"}))
+
+        def fake_run(cmd, cwd=None):
+            cmd = " ".join(cmd) if isinstance(cmd, list) else cmd
+            return (0, "#3: thêm login\n#3: sửa test\n") if cmd.startswith("git log") else (0, "omi/3-x")
+        with mock.patch.object(pipeline, "run_cmd", side_effect=fake_run), mock.patch("builtins.print"):
+            pipeline.submit(self.cfg, WF, 3)
+        return (self.T / "review-3.md").read_text(encoding="utf-8")
+
+    def test_ac126_1_pack_has_commits_and_last_check(self):
+        pack = self._pack126()
+        self.assertIn("## Commit\n- #3: thêm login\n- #3: sửa test", pack)
+        self.assertIn("## Check gần nhất\nCHECK FAIL (test)\nboom\nAssertionError: x", pack)
+
+    def test_ac126_2_pack_has_open_siblings_and_findings(self):
+        pack = self._pack126()
+        self.assertIn("## Task anh em còn mở\n- #4 #4 — Ready", pack)
+        self.assertNotIn("- #5 ", pack)
+        self.assertIn("- [2.1] Tách hàm (từ #4)", pack)
+
+    def test_ac126_3_pack_diff_drops_lockfiles(self):
+        pack = self._pack126()
+        self.assertIn("## Diff PR #50 (2 dòng)\nĐã bỏ file sinh/lockfile: package-lock.json, web/pnpm-lock.yaml",
+                      pack)  # giới hạn dòng tính trên phần còn lại
+        self.assertNotIn("+lock", pack)
+
     def test_ac63_1_submit_waits_for_pr_link(self):
         self.g.add(2, "User Story", "In Progress")
         self.g.add(3, "Task", "In Progress", parent=2)

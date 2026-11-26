@@ -12,7 +12,7 @@ from omi_hub.domain import findings
 from omi_hub.domain.errors import RuleError
 from omi_hub.domain.planning import AC_TYPES, pick_next, validate_plan
 from omi_hub.domain.progress import resume_step
-from omi_hub.domain.render import pr_title, render_context, render_plan, render_pr_body, tail
+from omi_hub.domain.render import filter_diff, pr_title, render_context, render_plan, render_pr_body, tail
 from omi_hub.domain.security import DEFAULT_SECURITY, needs_security
 from omi_hub.domain.templates import check_pr, sections
 from omi_hub.domain.text import affected, find_marker
@@ -132,10 +132,19 @@ def check(cfg):
         if cmd:
             code, out = run_cmd(cmd, cwd=repo_dir(cfg))
             if code:
-                print(f"CHECK FAIL ({step})\n{tail(out)}")
+                msg = f"CHECK FAIL ({step})\n{tail(out)}"
+                _save_check(cfg, msg)
+                print(msg)
                 return 1
+    _save_check(cfg, "CHECK PASS")
     print("CHECK PASS")
     return 0
+
+
+def _save_check(cfg, msg):
+    """Kết quả `check` gần nhất cho gói review."""
+    tmp_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (tmp_dir(cfg) / "check-last.txt").write_text(msg, encoding="utf-8")
 
 
 def submit(cfg, wf, n, done=None):
@@ -156,8 +165,8 @@ def submit(cfg, wf, n, done=None):
     if pr is None:
         _, head = run_cmd(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=repo_dir(cfg))
         pr = gh.open_pr_for_branch(cfg, head.strip())  # PR đã tạo nhưng issue chưa kịp liên kết → không tạo trùng
+    _, log = run_cmd(["git", "log", "--format=%s", f"{base}..HEAD"], cwd=repo_dir(cfg))
     if pr is None:  # title + body PR theo pr_template.json, do script sinh
-        _, log = run_cmd(["git", "log", "--format=%s", f"{base}..HEAD"], cwd=repo_dir(cfg))
         pr = gh.create_pr(cfg, pr_title(s), render_pr_body(s, parent, log.splitlines(), sec), head.strip())
     if s["status"] == "In Progress":
         _wait_linked(cfg, n)  # guard In Review cần PR đã liên kết
@@ -165,16 +174,24 @@ def submit(cfg, wf, n, done=None):
     reviewers = []
     if find_marker(gh.comments(cfg, n), "reviewed") is None:  # review LLM chỉ 1 lượt mỗi task
         reviewers = ["code"] + (["security"] if sec else [])
-        diff = gh.pr_diff(cfg, pr).splitlines()
+        diff, dropped = filter_diff(gh.pr_diff(cfg, pr).splitlines())
         limit = cfg.get("review_max_diff_lines", 1500)
         tmp_dir(cfg).mkdir(parents=True, exist_ok=True)
         pack = tmp_dir(cfg) / f"review-{n}.md"
-        pack.write_text(
-            render_context(s, parent, [gh.issue_snapshot(cfg, a) for a in affected(s["body"])])
-            + f"\n\n## Diff PR #{pr} ({len(diff)} dòng)\n```diff\n" + "\n".join(diff[:limit])
-            + ("\n... (đã cắt)" if len(diff) > limit else "") + "\n```\n"
-            + (f"\n## Findings đã có (không báo lại)\n{known}\n" if (known := carried_findings(cfg, parent)) else ""),
-            encoding="utf-8")
+        last = tmp_dir(cfg) / "check-last.txt"
+        sibs = [f"- #{c['number']} {c.get('title') or ''} — {c['status']}" for c in (parent or {}).get("children", [])
+                if c["number"] != n and c["state"] == "OPEN"]
+        known = carried_findings(cfg, parent)
+        parts = [render_context(s, parent, [gh.issue_snapshot(cfg, a) for a in affected(s["body"])]),
+                 "## Commit\n" + ("\n".join(f"- {x}" for x in log.splitlines() if x.strip()) or "(không có)"),
+                 "## Check gần nhất\n" + (last.read_text(encoding="utf-8") if last.exists() else "(chưa chạy `check`)"),
+                 "## Task anh em còn mở\n" + ("\n".join(sibs) or "(không có)"),
+                 "## Findings đã có (không báo lại)\n" + (known or "(không có)"),
+                 f"## Diff PR #{pr} ({len(diff)} dòng)"
+                 + (f"\nĐã bỏ file sinh/lockfile: {', '.join(dropped)}" if dropped else "")
+                 + "\n```diff\n" + "\n".join(diff[:limit])
+                 + ("\n... (đã cắt)" if len(diff) > limit else "") + "\n```"]
+        pack.write_text("\n\n".join(parts) + "\n", encoding="utf-8")
         print(f"REVIEW #{n} PR #{pr} pack={pack.as_posix()} reviewers={','.join(reviewers)}")
     else:
         print(f"REVIEW #{n} PR #{pr} reviewers=none")

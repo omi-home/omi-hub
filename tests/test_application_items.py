@@ -28,7 +28,7 @@ class FakeGh:
         s["open_blockers"] += sum(self.issues[b]["state"] == "OPEN" for b in self.blockers.get(n, []))
         p = self.issues.get(s["parent"])
         s["parent"] = {"number": p["number"], "type": p["type"], "status": p["status"]} if p else None
-        s["children"] = [{"number": c["number"], "type": c["type"], "status": c["status"], "state": c["state"]}
+        s["children"] = [{"number": c["number"], "title": c["title"], "type": c["type"], "status": c["status"], "state": c["state"]}
                          for c in self.issues.values() if c["parent"] == n]
         return s
 
