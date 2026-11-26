@@ -39,6 +39,9 @@ class TestInvariants(unittest.TestCase):
     def test_open_but_terminal(self):
         self.assertEqual(inv(item(status="Done"))[0]["fix"], ("close", "Done"))
 
+    def test_ac129_2_in_project_without_status_fixed_to_initial(self):
+        self.assertEqual(inv(item(status=None))[0]["fix"], ("status", "Draft"))
+
     def test_status_not_valid_for_type(self):
         self.assertIn("không hợp lệ", inv(item(status="Approved"))[0]["problem"])
 
