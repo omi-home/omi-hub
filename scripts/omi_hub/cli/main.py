@@ -4,7 +4,7 @@ import sys
 import traceback
 from pathlib import Path
 
-from omi_hub.application import audit, doctor, feedback, items, pipeline, plans, release, setup, views
+from omi_hub.application import audit, doctor, feedback, handoff, items, pipeline, plans, release, setup, views
 from omi_hub.application.workspace import load_cfg
 from omi_hub.config import load_templates, load_workflow
 from omi_hub.domain.errors import RuleError
@@ -33,6 +33,9 @@ def build_parser():
     p.add_argument("--accept-cmd")
     p.add_argument("--repo-dir", default=".", help="repo git, tương đối với workspace (cwd)")
     sub.add_parser("doctor", help="kiểm workspace sau khi cập nhật plugin")
+    p = sub.add_parser("handoff", help="cập nhật mục tự động của .omi/HANDOFF.md; `handoff note <text>` thêm ghi chú phiên")
+    p.add_argument("action", nargs="?", choices=["note"])
+    p.add_argument("text", nargs="?")
     p = sub.add_parser("feedback", help="ghi bug/improvement của plugin thành issue ở repo omi-hub")
     p.add_argument("title")
     p.add_argument("--body")
@@ -124,6 +127,13 @@ def run(a, wf):
     if a.cmd == "doctor":
         feedback.flush(cfg)
         return doctor.doctor(cfg)
+    if a.cmd == "handoff":
+        if a.action == "note":
+            if not (a.text or "").strip():
+                raise RuleError("Cần nội dung: `handoff note \"<text>\"`")
+            handoff.note(cfg, a.text)
+            return 0
+        return handoff.handoff(cfg, wf)
     if a.cmd == "feedback":
         feedback.feedback(cfg, a.title, a.body, a.kind, a.cmd)
         return 0
