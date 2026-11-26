@@ -68,14 +68,31 @@ def handoff(cfg, wf, today=None, doctor_summary=_doctor_summary):
         [label(i["number"]) for i in sorted(its, key=lambda x: x["number"]) if i["status"] in ("Draft", "Triage")],
         fnd, _queue_len(cfg), done, datetime.now().strftime("%Y-%m-%d %H:%M"))
     doc = hd.put_block(doc, hd.AUTO, auto)
+    if cur_n is None:  # không còn task dở: checkpoint cũ hết giá trị
+        doc = hd.drop_block(doc, hd.WIP)
     doc, removed = hd.prune_notes(doc, {n for n, i in by.items() if i["status"] in CLOSED}, today or date.today())
     _write(p, doc)
     print(f"HANDOFF {p.as_posix()}" + (f" (xoá {removed} ghi chú cũ)" if removed else ""))
     return 0
 
 
-def note(cfg, text, today=None):
+def note(cfg, text, today=None, wip=False):
     p = _path(cfg)
     doc = p.read_text(encoding="utf-8") if p.exists() else "# HANDOFF\n"
-    _write(p, hd.add_note(doc, text, today or date.today()))
-    print(f"HANDOFF NOTE {p.as_posix()}")
+    _write(p, hd.set_intent(doc, text, datetime.now().strftime("%Y-%m-%d %H:%M:%S")) if wip
+           else hd.add_note(doc, text, today or date.today()))
+    print(f"HANDOFF {'WIP' if wip else 'NOTE'} {p.as_posix()}")
+
+
+def wip_text(cfg):
+    p = _path(cfg)
+    return hd.get_block(p.read_text(encoding="utf-8"), hd.WIP) if p.exists() else None
+
+
+def clear_wip(cfg):
+    p = _path(cfg)
+    if p.exists():
+        doc = p.read_text(encoding="utf-8")
+        new = hd.drop_block(doc, hd.WIP)
+        if new != doc:
+            _write(p, new)

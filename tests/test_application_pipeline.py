@@ -380,6 +380,24 @@ class TestPipeline(unittest.TestCase):
         self.assertEqual((self.st(3), self.g.issues[3]["rework_count"]), ("In Progress", 1))
         self.assertTrue(any("omi:reviewed" in c for c in self.g.notes[3]))
 
+    def test_ac144_7_resume_prints_checkpoint_and_clears_when_done(self):
+        from omi_hub.domain import handoff as hd
+        self.g.add(2, "Functional Requirement", "In Progress")
+        self.g.add(3, "Task", "In Progress", parent=2)
+        self.T.mkdir(parents=True)
+        (self.T / "current").write_text("3", encoding="utf-8")
+        f = self.T.parent / "HANDOFF.md"
+        f.write_text(hd.put_block("# HANDOFF\n", hd.WIP, "- Task: #3 · bước: code\n" + hd.INTENT + "sửa parser"),
+                     encoding="utf-8")
+        with mock.patch.object(pipeline, "run_cmd", return_value=(0, " M a.py")), mock.patch("builtins.print") as pr:
+            self.assertEqual(pipeline.resume(self.cfg, WF), "code")
+        out = "\n".join(str(c.args[0]) for c in pr.call_args_list if c.args)
+        self.assertIn("## Checkpoint phiên trước\n- Task: #3 · bước: code\n- Ý định: sửa parser", out)
+        self.g.issues[3].update(status="Done", state="CLOSED")
+        with mock.patch.object(pipeline, "run_cmd", return_value=(0, "")), mock.patch("builtins.print"):
+            self.assertEqual(pipeline.resume(self.cfg, WF), "next")
+        self.assertIsNone(hd.get_block(f.read_text(encoding="utf-8"), hd.WIP))
+
     def test_resume_after_crash_before_review(self):
         self.g.add(2, "User Story", "In Progress")
         self.g.add(3, "Task", "In Review", parent=2, prs=[dict(OPEN_PR)])

@@ -70,9 +70,12 @@ def task_files(n):
 
 
 def after_terminal(cfg, wf, snap):
-    if cfg.get("_root"):  # Done/Cancelled: dọn file tạm của task
+    if cfg.get("_root"):  # Done/Cancelled: dọn file tạm của task; là task đang làm → bỏ current (checkpoint wip do handoff dọn)
         for f in task_files(snap["number"]):
             (tmp_dir(cfg) / f).unlink(missing_ok=True)
+        cur = tmp_dir(cfg) / "current"
+        if cur.exists() and cur.read_text(encoding="utf-8").strip() == str(snap["number"]):
+            cur.unlink()
     release_dependents(cfg, wf, snap["number"])
     if snap.get("milestone") and gh.milestone_open_issues(cfg, snap["milestone"]) == 0:
         print(f"MILESTONE {snap['milestone']} sẵn sàng release")  # spec §4.6: báo, không tự đóng milestone

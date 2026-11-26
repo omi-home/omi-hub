@@ -1,9 +1,10 @@
-"""Hook omi-hub. `pre`: chặn đi tắt / hỏi khi chốt baseline. `session`: in OMI_CLI + nạp context task."""
+"""Hook omi-hub. `pre`: chặn đi tắt / hỏi. `post`: checkpoint wip. `end`: handoff. `session`: in OMI_CLI + context."""
 import json
 import os
 import re
 import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
 
 DENY = [
@@ -77,6 +78,46 @@ def session_text(plugin_root, cwd, source="startup", run=_run):
     return f"{head}\nNEXT: {nxt}" if nxt else head
 
 
+def _plugin_root():
+    return Path(os.environ.get("CLAUDE_PLUGIN_ROOT") or Path(__file__).resolve().parents[1])
+
+
+def _run_all(cmds, cwd):
+    """Chạy song song (git trên Windows ~60 ms/lệnh, hook phải < 200 ms); lỗi → ""."""
+    ps = [subprocess.Popen(c, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
+                           encoding="utf-8", errors="replace") for c in cmds]
+    return [(p.communicate()[0] or "").rstrip() if p.wait() == 0 else "" for p in ps]
+
+
+def checkpoint(root, data, run=_run_all, now=None):
+    """PostToolUse: ghi mục wip của HANDOFF chỉ bằng git cục bộ + file tạm (không gọi mạng)."""
+    tmp = root / ".omi" / "tmp"
+    cur = tmp / "current"
+    if not cur.exists():
+        return False
+    sys.path.insert(0, str(_plugin_root() / "scripts"))
+    from omi_hub.domain import handoff as hd
+    n = cur.read_text(encoding="utf-8").strip()
+    cfg = json.loads((root / ".omi" / "project.json").read_text(encoding="utf-8"))
+    rd = root / cfg.get("repo_dir", ".")
+    branch, status, last, short = run([["git", "rev-parse", "--abbrev-ref", "HEAD"], ["git", "status", "--porcelain"],
+                                       ["git", "log", "-1", "--format=%h %s"], ["git", "diff", "--shortstat", "HEAD"]], rd)
+    step = "code" if status else ("review/qa" if (tmp / f"review-{n}.md").exists() else "check → submit")
+    check = tmp / "check-last.txt"
+    ti = data.get("tool_input") or {}
+    cmd = " ".join(str(ti.get("command") or ti.get("file_path") or "").split())
+    f = root / ".omi" / "HANDOFF.md"
+    doc = f.read_text(encoding="utf-8") if f.exists() else "# HANDOFF\n"
+    wip = hd.render_wip(n, branch, step, last, status, short if status else "",
+                        check.read_text(encoding="utf-8").splitlines()[0] if check.exists() else None,
+                        f"{data.get('tool_name', '?')}: {cmd[:150]}" if cmd else None,
+                        hd.wip_intent(doc), now or datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    t = f.with_suffix(".md.tmp")
+    t.write_text(hd.put_block(doc, hd.WIP, wip), encoding="utf-8")
+    t.replace(f)
+    return True
+
+
 def main():
     mode = sys.argv[1] if len(sys.argv) > 1 else ""
     if mode == "pre":
@@ -86,6 +127,13 @@ def main():
             print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse",
                                                      "permissionDecision": d[0],
                                                      "permissionDecisionReason": d[1]}}, ensure_ascii=False))
+    elif mode == "post":  # lỗi checkpoint không được làm phiền agent
+        root = _find_root(Path.cwd())
+        if root:
+            try:
+                checkpoint(root, json.load(sys.stdin))
+            except Exception:  # noqa: BLE001
+                pass
     elif mode == "end":  # SessionEnd: phiên dừng giữa task vẫn có HANDOFF mới; không gọi LLM, lỗi chỉ bỏ qua
         root = _find_root(Path.cwd())
         if root:

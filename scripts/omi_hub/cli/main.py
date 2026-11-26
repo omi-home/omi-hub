@@ -36,6 +36,7 @@ def build_parser():
     p = sub.add_parser("handoff", help="cập nhật mục tự động của .omi/HANDOFF.md; `handoff note <text>` thêm ghi chú phiên")
     p.add_argument("action", nargs="?", choices=["note"])
     p.add_argument("text", nargs="?")
+    p.add_argument("--wip", action="store_true", help="note: ghi đè ý định hiện tại trong checkpoint")
     p = sub.add_parser("feedback", help="ghi bug/improvement của plugin thành issue ở repo omi-hub")
     p.add_argument("title")
     p.add_argument("--body")
@@ -131,7 +132,7 @@ def run(a, wf):
         if a.action == "note":
             if not (a.text or "").strip():
                 raise RuleError("Cần nội dung: `handoff note \"<text>\"`")
-            handoff.note(cfg, a.text)
+            handoff.note(cfg, a.text, wip=a.wip)
             return 0
         return handoff.handoff(cfg, wf)
     if a.cmd == "feedback":
