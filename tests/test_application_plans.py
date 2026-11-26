@@ -10,6 +10,11 @@ from omi_hub.domain.errors import RuleError
 
 
 class TestApply(unittest.TestCase):
+    def setUp(self):  # đồng bộ title/body có test riêng (ac149_2/3)
+        self.sync = mock.patch.object(plans, "sync", return_value=None)
+        self.sync.start()
+        self.addCleanup(mock.patch.stopall)
+
     PLAN = {"milestone": "v1", "items": [
         {"key": "E001", "type": "Epic", "title": "Quản lý đơn hàng",
          "body": "### Mục tiêu\nBán hàng online\n\n### Phạm vi\n- đặt hàng", "children": [
@@ -62,9 +67,35 @@ class TestApply(unittest.TestCase):
         sn.assert_not_called()
         mv.assert_not_called()
 
+    def _sync_case(self, status):
+        self.sync.stop()
+        epic = self.PLAN["items"][0]
+        task = epic["children"][0]["children"][0]
+        same = {"number": 7, "title": "[Epic] Quản lý đơn hàng",
+                "body": epic["body"].replace("\n", "\r\n") + "  \n\n<!-- omi:key=E001 -->"}  # chỉ khác khoảng trắng
+        existing = {"E001": same,
+                    "E001.F001.T001": {"number": 9, "title": "[Task] Thêm API cũ",
+                                       "body": "### Việc cần làm\ncũ\n\n<!-- omi:key=E001.F001.T001 -->"}}
+        with mock.patch.object(items, "snapshot", return_value={"status": status}) as sn, \
+                mock.patch.object(plans.gh, "update_body") as ub, mock.patch("builtins.print") as pr:
+            self.run_apply(existing, approve=False)
+        return task, ub, [c.args[0] for c in pr.call_args_list], sn
+
+    def test_ac149_2_draft_issue_updated_from_plan(self):
+        task, ub, out, sn = self._sync_case("Draft")
+        ub.assert_called_once_with({}, 9, task["body"] + "\n\n<!-- omi:key=E001.F001.T001 -->", "[Task] Thêm API đặt hàng")
+        self.assertEqual(out, ["UPDATED #9"])
+        self.assertEqual(sn.call_count, 1)  # Epic giống plan (chỉ khác khoảng trắng) → không đọc, không sửa
+
+    def test_ac149_3_approved_issue_only_reports_drift(self):
+        _, ub, out, _ = self._sync_case("Ready")
+        ub.assert_not_called()
+        self.assertEqual(len(out), 1)
+        self.assertRegex(out[0], r"^DRIFT #9 \(Ready\): .*Change Request.*`OMI_CLI edit 9 --field")
+
     def test_key_of_other_issue_rejected_before_creating(self):
         with self.assertRaisesRegex(RuleError, "key E001 đã là #1"):
-            self.run_apply({"E001": {"number": 1, "title": "[Epic] Plan cũ"}}, approve=True)
+            self.run_apply({"E001": {"number": 1, "title": "[Task] Plan cũ"}}, approve=True)
 
     def test_blocked_by_links_missing_only(self):
         plan = json.loads(json.dumps(self.PLAN))

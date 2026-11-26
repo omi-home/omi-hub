@@ -7,11 +7,35 @@ from omi_hub.config import load_templates
 from omi_hub.domain.errors import RuleError
 from omi_hub.domain.lifecycle import WAITING, check_creatable
 from omi_hub.domain.planning import validate_plan
-from omi_hub.domain.templates import with_prefix
+from omi_hub.domain.templates import check_template, prefix, with_prefix
+from omi_hub.domain.text import build_body
 from omi_hub.infrastructure.github import gateway as gh
 
 APPROVE_STATUS = {"Epic": "Approved", "User Story": "Approved", "Functional Requirement": "Approved", "Non-Functional Requirement": "Approved",
                   "Task": "Ready"}
+
+
+def _norm(s):
+    return "\n".join(x.rstrip() for x in (s or "").replace("\r\n", "\n").strip().splitlines())
+
+
+def sync(cfg, tpl, node, old):
+    """Issue có sẵn khác plan: Draft → cập nhật title/body (`UPDATED`); đã duyệt → chỉ báo `DRIFT`. Trả status nếu đã đọc."""
+    title = with_prefix(tpl, node["type"], node["title"])
+    body = build_body(node.get("body", ""), node.get("affects", []), node["key"])
+    if old["title"] == title and _norm(old.get("body")) == _norm(body):
+        return None
+    n, status = old["number"], items.snapshot(cfg, old["number"])["status"]
+    if status == "Draft":
+        errs = check_template(tpl, node["type"], title, body)
+        if errs:
+            raise RuleError(errs)
+        gh.update_body(cfg, n, body, title if title != old["title"] else None)
+        print(f"UPDATED #{n}")
+    else:
+        print(f"DRIFT #{n} ({status}): plan khác issue — không tự sửa; đổi yêu cầu qua Change Request rồi "
+              f"`OMI_CLI edit {n} --field \"Mục=nội dung\" --cr <cr>`")
+    return status
 
 
 def apply(cfg, wf, plan_path, approve=False):
@@ -31,8 +55,8 @@ def apply(cfg, wf, plan_path, approve=False):
     errs = []
     for node in nodes:
         old = found.get(node["key"])
-        if old and old["title"] != with_prefix(tpl, node["type"], node["title"]):
-            errs.append(f"key {node['key']} đã là #{old['number']} '{old['title']}' — đổi key hoặc sửa title cho khớp")
+        if old and not old["title"].startswith(prefix(node["type"])):  # khác loại = key của plan khác
+            errs.append(f"key {node['key']} đã là #{old['number']} '{old['title']}' — đổi key hoặc sửa type cho khớp")
         if node["key"] not in found:  # node đã có trên GitHub (plan cũ) được bỏ qua như trước
             try:
                 check_creatable(wf, node["type"])
@@ -57,8 +81,10 @@ def apply(cfg, wf, plan_path, approve=False):
                         body=node.get("body", ""), key=node["key"],
                         status=APPROVE_STATUS.get(node["type"]) if approve else None)
             keys[node["key"]] = n
-        elif approve and node["type"] in APPROVE_STATUS and items.snapshot(cfg, n)["status"] == "Draft":
-            items.move(cfg, wf, n, APPROVE_STATUS[node["type"]])  # Task còn blocker mở → move tự đặt Waiting
+        else:
+            status = sync(cfg, tpl, node, found[node["key"]]) if node["key"] in found else None
+            if approve and node["type"] in APPROVE_STATUS and (status or items.snapshot(cfg, n)["status"]) == "Draft":
+                items.move(cfg, wf, n, APPROVE_STATUS[node["type"]])  # Task còn blocker mở → move tự đặt Waiting
         for c in node.get("children", []):
             create(c, n)
 
