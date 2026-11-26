@@ -15,7 +15,7 @@ ASK = [
     (re.compile(r"omi\.py[\"']?\s+move\s+#?\d+\s+[\"']?Approved\b"), "Chốt baseline (Approved) cần người xác nhận"),
     (re.compile(r"omi\.py[\"']?\s+apply\b.*--approve"), "Apply plan với --approve sẽ chốt baseline, cần người xác nhận"),
 ] + [(re.compile(rx), f"Repo cài omi-hub: issue/GitHub Project chỉ thao tác qua OMI_CLI — dùng {hint}; "
-                      "thiếu lệnh → báo người dùng, đề xuất issue omi-hub") for rx, hint in [
+                      "thiếu lệnh → báo người dùng, ghi `OMI_CLI feedback` (issue omi-hub)") for rx, hint in [
     (r"\bgh\s+issue\s+create\b", "`OMI_CLI new <Type> \"<title>\" --parent <n>`"),
     (r"\bgh\s+issue\s+edit\b", "`OMI_CLI edit <n> --field \"Mục=nội dung\"`"),
     (r"\bgh\s+issue\s+comment\b.*--edit-last", "`OMI_CLI edit` (nội dung thuộc body issue)"),
@@ -66,7 +66,7 @@ def session_text(plugin_root, cwd, source="startup", run=_run):
         "workspace omi sẵn sàng" if root else "chưa init (OMI_CLI init --repo-dir <repo> từ workspace)")
     if root:
         head += ("\nQUY TẮC: issue/GitHub Project chỉ thao tác qua OMI_CLI (không gh issue/project trực tiếp);"
-                 " thiếu lệnh → báo người dùng, đề xuất issue omi-hub")
+                 " thiếu lệnh/plugin chạy sai → báo người dùng, ghi `OMI_CLI feedback \"<tóm tắt>\"` (issue omi-hub)")
     if not root or source not in ("startup", "clear"):
         return head
     cur = root / ".omi" / "tmp" / "current"

@@ -1,6 +1,7 @@
 """Parse tham số và gọi use case. Lệnh mới đăng ký thêm ở đây khi task tương ứng làm xong."""
 import argparse
 import sys
+import traceback
 from pathlib import Path
 
 from omi_hub.application import audit, doctor, feedback, items, pipeline, plans, release, setup, views
@@ -179,6 +180,17 @@ def main(argv=None):
     a = build_parser().parse_args(argv)
     try:
         return run(a, load_workflow())
-    except (RuleError, GhError, OSError, ValueError) as e:  # ValueError gồm JSONDecodeError (plan hỏng)
+    except (RuleError, OSError, ValueError) as e:  # lỗi theo dữ liệu/quy tắc của người dùng; ValueError gồm plan hỏng
         print(f"❌ {e}", file=sys.stderr)
         return 2
+    except Exception as e:  # GhError hoặc lỗi nội bộ: có thể là lỗi plugin → gợi ý feedback
+        if not isinstance(e, GhError):
+            traceback.print_exc()
+        print(f"❌ {e}\n{feedback_hint(a.cmd, e)}", file=sys.stderr)
+        return 2
+
+
+def feedback_hint(cmd, err):
+    first = (str(err).splitlines() or [type(err).__name__])[0][:80].replace('"', "'")
+    return (f'→ Nếu là lỗi plugin: OMI_CLI feedback "{cmd}: {first}" --kind bug --cmd {cmd}'
+            if cmd != "feedback" else "→ ghi lại lỗi này cho người dùng (feedback không gửi được)")

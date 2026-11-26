@@ -3,7 +3,7 @@ name: omi-resume
 description: "Tiếp tục task omi còn dở của phiên trước (tạm dừng, chạm limit): script xác định bước tiếp theo rồi làm tiếp theo omi-implement."
 ---
 
-`OMI_CLI` = lệnh ở dòng `OMI_CLI:` đầu phiên. Không đọc lại lịch sử phiên trước; trạng thái nằm trên GitHub + git + `.omi/tmp/`.
+`OMI_CLI` = lệnh ở dòng `OMI_CLI:` đầu phiên. Plugin chạy sai/thiếu lệnh → báo người dùng, ghi `OMI_CLI feedback "<tóm tắt>"` (issue omi-hub). Không đọc lại lịch sử phiên trước; trạng thái nằm trên GitHub + git + `.omi/tmp/`.
 
 1. Đầu phiên đã có dòng `RESUME ...` (hook) → dùng luôn; nếu không: `OMI_CLI resume`.
 2. Theo `step`:
