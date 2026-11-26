@@ -1,5 +1,6 @@
 """Use case vòng đời work item: new, move, rework, block, unblock + rollup lên parent."""
 from omi_hub.config import load_templates
+from omi_hub.domain import findings
 from omi_hub.domain.errors import RuleError
 from omi_hub.domain.guards import evaluate_guards
 from omi_hub.domain.lifecycle import BLOCKED, WAITING, allowed_statuses, check_creatable, is_terminal, transition
@@ -34,8 +35,32 @@ def apply_status(cfg, wf, snap, target, reason=None):
         snap["state"] = "CLOSED"
     print(f"#{n} {snap['type']}: {snap['status']} → {target}")
     snap["status"] = target
+    if target in ("In QA", "Done"):
+        escalate_findings(cfg, wf, snap)
     if is_terminal(wf, target):
         after_terminal(cfg, wf, snap)
+
+
+def escalate_findings(cfg, wf, snap):
+    """Item sang In QA/Done còn finding mở → chuyển lên parent (ghi nguồn); gốc kết thúc → báo FINDINGS OPEN."""
+    n = snap["number"]
+    cid, body = gh.marked_comment(cfg, n, findings.NAME)
+    its = findings.parse(body)
+    open_ = [(i, t) for i, (done, t) in enumerate(its, 1) if not done]
+    if not open_:
+        return
+    if not snap["parent"]:
+        if is_terminal(wf, snap["status"]):
+            print(f"FINDINGS OPEN #{n} {len(open_)}")
+        return
+    p = snap["parent"]["number"]
+    pcid, pbody = gh.marked_comment(cfg, p, findings.NAME)
+    pits = findings.parse(pbody)
+    for _, t in open_:
+        pits, _ = findings.add(pits, t, f"chuyển từ #{n}")
+    gh.upsert_comment(cfg, p, pcid, findings.render(pits))
+    gh.upsert_comment(cfg, n, cid, findings.render(findings.mark(its, {i for i, _ in open_}, f"chuyển lên #{p}")))
+    print(f"FINDINGS #{n} → #{p}: {len(open_)}")
 
 
 def after_terminal(cfg, wf, snap):

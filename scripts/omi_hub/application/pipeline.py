@@ -66,14 +66,36 @@ def context(cfg, n):
     return text
 
 
+def _ancestor_findings(cfg, anc):
+    """{p: (comment_id, items)} của parent và mọi tổ tiên."""
+    out = {}
+    while anc:
+        cid, body = gh.marked_comment(cfg, anc["number"], findings.NAME)
+        out[anc["number"]] = (cid, findings.parse(body))
+        anc = gh.issue_snapshot(cfg, anc["parent"]["number"]) if anc["parent"] else None
+    return out
+
+
 def carried_findings(cfg, anc):
     """Finding còn mở của parent và mọi tổ tiên, mỗi dòng có mã `<p>.<i>`."""
-    lines = []
-    while anc:
-        _, body = gh.marked_comment(cfg, anc["number"], findings.NAME)
-        lines += [f"- [{code}] {t}" for code, t in findings.open_codes(anc["number"], findings.parse(body))]
-        anc = gh.issue_snapshot(cfg, anc["parent"]["number"]) if anc["parent"] else None
-    return "\n".join(lines)
+    return "\n".join(f"- [{code}] {t}" for p, (_, its) in _ancestor_findings(cfg, anc).items()
+                     for code, t in findings.open_codes(p, its))
+
+
+def done_findings(cfg, s, raw):
+    """`submit --findings`: kiểm hết mã trước (sai → lỗi, không sửa gì) rồi đánh dấu `[x] ... (xong ở #n)`."""
+    want = findings.parse_codes(raw)
+    have = _ancestor_findings(cfg, gh.issue_snapshot(cfg, s["parent"]["number"]) if s["parent"] else None)
+    bad = [f"{p}.{i}" for p, idx in want.items() for i in sorted(idx)
+           if p not in have or f"{p}.{i}" not in dict(findings.open_codes(p, have[p][1]))]
+    if bad:
+        raise RuleError(f"Mã finding không tồn tại/không còn mở cho #{s['number']}: {', '.join(bad)}"
+                        " — xem `context`")
+    for p, idx in want.items():
+        cid, its = have[p]
+        gh.upsert_comment(cfg, p, cid, findings.render(findings.mark(its, idx, f"xong ở #{s['number']}")))
+    if want:
+        print(f"FINDINGS xong: {raw}")
 
 
 def start(cfg, wf, n=None):
@@ -116,10 +138,12 @@ def check(cfg):
     return 0
 
 
-def submit(cfg, wf, n):
+def submit(cfg, wf, n, done=None):
     s = items.snapshot(cfg, n)
     if s["status"] not in ("In Progress", "In Review"):
         raise RuleError(f"#{n} phải ở In Progress/In Review (hiện: {s['status']})")
+    if done:
+        done_findings(cfg, s, done)
     code, out = run_cmd(["git", "push", "-u", "origin", "HEAD"], cwd=repo_dir(cfg))
     if code:
         raise RuleError("git push lỗi:\n" + tail(out, 20))
@@ -279,7 +303,7 @@ def add_findings(cfg, n, texts):
     cid, body = gh.marked_comment(cfg, p, findings.NAME)
     its, added = findings.parse(body), 0
     for t in texts:
-        its, ok = findings.add(its, t, n)
+        its, ok = findings.add(its, t, f"từ #{n}")
         added += ok
     if added:
         gh.upsert_comment(cfg, p, cid, findings.render(its))
