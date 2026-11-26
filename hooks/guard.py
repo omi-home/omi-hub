@@ -86,6 +86,15 @@ def main():
             print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse",
                                                      "permissionDecision": d[0],
                                                      "permissionDecisionReason": d[1]}}, ensure_ascii=False))
+    elif mode == "end":  # SessionEnd: phiên dừng giữa task vẫn có HANDOFF mới; không gọi LLM, lỗi chỉ bỏ qua
+        root = _find_root(Path.cwd())
+        if root:
+            plugin = os.environ.get("CLAUDE_PLUGIN_ROOT") or Path(__file__).resolve().parents[1]
+            try:
+                subprocess.run([sys.executable, str(Path(plugin) / "scripts" / "omi.py"), "handoff"], cwd=root,
+                               capture_output=True, timeout=50)
+            except (OSError, subprocess.TimeoutExpired):
+                pass
     elif mode == "session":
         try:
             source = json.load(sys.stdin).get("source", "startup")

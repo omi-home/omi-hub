@@ -72,7 +72,8 @@ class TestPipeline(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.cfg = dict(PCFG, _root=self.tmp.name)
         self.T = Path(self.tmp.name) / ".omi" / "tmp"
-        self.patches = [mock.patch.object(items, "gh", self.g), mock.patch.object(pipeline, "gh", self.g)]
+        self.patches = [mock.patch.object(items, "gh", self.g), mock.patch.object(pipeline, "gh", self.g),
+                        mock.patch.object(pipeline.handoff, "handoff")]  # handoff có test riêng
         for p in self.patches:
             p.start()
 
@@ -400,6 +401,25 @@ class TestPipeline(unittest.TestCase):
             items.move(self.cfg, WF, 4, "Cancelled", "không cần")
         self.assertIn(mock.call("DONE #3"), pr.call_args_list)
         self.assertEqual(sorted(f.name for f in self.T.iterdir()), ["review-5.md"])
+
+    def test_ac144_4_qa_done_runs_handoff_errors_only_warn(self):
+        self.g.add(2, "Functional Requirement", "In Progress", body=AC1)
+        self.g.add(3, "Task", "In Review", parent=2, prs=[dict(OPEN_PR)])
+        pipeline.handoff.handoff.side_effect = OSError("disk")
+        with mock.patch.object(pipeline, "run_cmd", return_value=(0, "test_ac2_1 ... ok")), mock.patch("builtins.print") as pr:
+            self.assertEqual(pipeline.qa(self.cfg, WF, 3), 0)
+        pipeline.handoff.handoff.assert_called_once_with(self.cfg, WF)
+        self.assertEqual(pr.call_args, mock.call("HANDOFF WARN: disk"))
+        self.assertEqual(self.st(3), "Done")
+
+    def test_ac144_4_cli_move_cancelled_runs_handoff(self):
+        from omi_hub.cli import main as cli
+        for result, calls in (("Cancelled", 1), ("Ready", 0)):
+            with mock.patch.object(cli, "load_cfg", return_value=self.cfg), \
+                    mock.patch.object(cli.items, "move", return_value=result), \
+                    mock.patch.object(cli.pipeline, "auto_handoff") as ah:
+                cli.run(cli.build_parser().parse_args(["move", "3", result]), WF)
+            self.assertEqual(ah.call_count, calls, result)
 
     def test_ac142_2_start_prunes_old_tmp_files(self):
         self.g.add(2, "Functional Requirement", "Approved")

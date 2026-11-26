@@ -3,7 +3,7 @@ import json
 import time
 from pathlib import Path
 
-from omi_hub.application import items
+from omi_hub.application import handoff, items
 from omi_hub.application.workspace import repo_dir, tmp_dir
 from omi_hub.config import load_pr_template, load_templates
 from omi_hub.domain.acceptance import accept_verdict, parse_ac
@@ -250,7 +250,16 @@ def qa(cfg, wf, n):
         p = items.snapshot(cfg, s["parent"]["number"])
         if p["status"] == "In QA" and p["type"] in AC_TYPES:
             accept(cfg, wf, p["number"])
+    auto_handoff(cfg, wf)
     return 0
+
+
+def auto_handoff(cfg, wf):
+    """Sau DONE/Cancelled: cập nhật HANDOFF bằng script; lỗi chỉ cảnh báo, không làm hỏng lệnh chính."""
+    try:
+        handoff.handoff(cfg, wf)
+    except Exception as e:  # noqa: BLE001 — handoff là phụ, không được làm fail qa/move
+        print(f"HANDOFF WARN: {str(e).splitlines()[0] if str(e) else type(e).__name__}")
 
 
 def accept(cfg, wf, n):

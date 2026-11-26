@@ -4,6 +4,9 @@
       {"matcher": "Bash|PowerShell",
        "hooks": [{"type": "command", "command": "python \"${CLAUDE_PLUGIN_ROOT}/hooks/guard.py\" pre"}]}
     ],
+    "SessionEnd": [
+      {"hooks": [{"type": "command", "command": "python \"${CLAUDE_PLUGIN_ROOT}/hooks/guard.py\" end", "timeout": 60}]}
+    ],
     "SessionStart": [
       {"hooks": [{"type": "command", "command": "python \"${CLAUDE_PLUGIN_ROOT}/hooks/guard.py\" session"}]}
     ]
