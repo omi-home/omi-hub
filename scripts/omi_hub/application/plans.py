@@ -57,6 +57,8 @@ def apply(cfg, wf, plan_path, approve=False):
                         body=node.get("body", ""), key=node["key"],
                         status=APPROVE_STATUS.get(node["type"]) if approve else None)
             keys[node["key"]] = n
+        elif approve and node["type"] in APPROVE_STATUS and items.snapshot(cfg, n)["status"] == "Draft":
+            items.move(cfg, wf, n, APPROVE_STATUS[node["type"]])  # Task còn blocker mở → move tự đặt Waiting
         for c in node.get("children", []):
             create(c, n)
 

@@ -361,7 +361,7 @@ Blocked và rework là quy tắc chung, được `domain/` xử lý, không lặ
 | `block N (--reason R \| --by M)` / `unblock N` | Mục 4.3 Blocked; chỉ `--by` (Task/Bug ở Draft/Triage/Ready) → Waiting; `unblock` về Waiting nếu còn blocker mở |
 | `tree [N]` | In cây item kèm status, `⛔ #n` cho blocked-by đang mở |
 | `next` | Task/Bug Ready, ưu tiên cao nhất, milestone sớm nhất, không bị chặn |
-| `apply PLAN.json [--approve]` | Tạo cây từ plan, idempotent theo `omi:key`; tạo quan hệ `blocked_by` còn thiếu, Task Ready còn blocker mở → Waiting |
+| `apply PLAN.json [--approve]` | Tạo cây từ plan, idempotent theo `omi:key`; tạo quan hệ `blocked_by` còn thiếu, Task Ready còn blocker mở → Waiting; `--approve` cũng chuyển issue có sẵn đang Draft sang Approved (container) / Ready|Waiting (Task), từ trên xuống |
 | `plan-show PLAN.json` | Validate (quan hệ + template + `blocked_by`, vòng lặp) + in cây plan (key, type, title, số AC, `⛔` phụ thuộc) |
 | `template <type>` | In khung title + body chuẩn của loại (mục 3.6) |
 | `pr-lint N` | Kiểm title + body PR theo template PR (mục 3.7); in `PR OK` hoặc `PR FAIL` + lỗi; PR release (head = develop) bỏ qua |
