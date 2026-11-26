@@ -16,6 +16,7 @@ description: Làm một Task/Bug omi tới Done (start → code → check → su
    - Có `BLOCKER:` → `OMI_CLI review-done n --fail "<blocker gộp ≤ 3 dòng>" [--improve "..."]...` (script ghi nhận + rework) → sửa → `check` → `submit n` (lần này `reviewers=none`, không review lại).
 5. `OMI_CLI qa n`:
    - `QA FAIL ... log=<f> status=In Progress` → đọc log, sửa, `check`, `submit n`, `qa n`.
+   - `QA INFRA <lý do>` → lỗi hạ tầng CI, không rework: báo người dùng, sửa cấu hình xong chạy lại `qa n`.
    - `status=Blocked` → dừng, báo người dùng (vượt 3 lần rework).
    - `DONE #n`. Nếu có `ACCEPT FAIL #p` với AC tự động → `OMI_CLI new Task "Đạt AC<i> của #p" --parent p --field "Việc cần làm=<nội dung AC>"`, `move` Ready, báo người dùng. AC `[manual]` → nhắc người dùng tick.
 6. Báo một dòng: `#n Done · PR #pr · rework k · task mới: ...` và nhắc: "Gõ `/clear` rồi `tiếp` — hook tự nạp task kế tiếp".

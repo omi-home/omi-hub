@@ -225,7 +225,7 @@ class TestPipeline(unittest.TestCase):
         pr.assert_called_once_with("CHECK WARN: chưa cấu hình commands.test")
 
     def test_ac132_3_submit_first_time_prints_one_review_line(self):
-        self.g.add(2, "User Story", "In Progress")
+        self.g.add(2, "Functional Requirement", "In Progress")
         self.g.add(3, "Task", "In Progress", parent=2)
         self.g.link_lag = 2
         with mock.patch.object(pipeline, "run_cmd", return_value=(0, "omi/3-x")), \
@@ -258,6 +258,21 @@ class TestPipeline(unittest.TestCase):
             self.assertEqual(pipeline.qa(self.cfg, WF, 3), 1)
         self.assertEqual((self.st(3), self.g.issues[3]["rework_count"]), ("In Progress", 1))
         self.assertIn("boom", (self.T / "qa-3.log").read_text(encoding="utf-8"))
+
+    def test_ac132_2_qa_ci_infra_error_no_rework(self):
+        self.g.add(2, "Functional Requirement", "In Progress")
+        self.g.add(3, "Task", "In Review", parent=2, prs=[dict(OPEN_PR)])
+        for log in ("pr-lint\tfail\nError: Input required and not supplied: token",
+                    "HTTP 502: Bad Gateway (https://api.github.com/graphql)"):
+            self.g.pr_checks = lambda cfg, pr, log=log: (False, log)
+            with mock.patch("builtins.print") as pr:
+                self.assertEqual(pipeline.qa(self.cfg, WF, 3), 1)
+            self.assertTrue(pr.call_args.args[0].startswith("QA INFRA "), pr.call_args)
+            self.assertEqual((self.st(3), self.g.issues[3]["rework_count"]), ("In Review", 0))
+        self.g.pr_checks = lambda cfg, pr: (False, "AssertionError: boom")  # lỗi task vẫn rework
+        with mock.patch("builtins.print"):
+            pipeline.qa(self.cfg, WF, 3)
+        self.assertEqual((self.st(3), self.g.issues[3]["rework_count"]), ("In Progress", 1))
 
     def test_accept_manual_unticked_stays_in_qa(self):
         self.g.add(2, "User Story", "In QA", body="### Acceptance criteria\n- [ ] [manual] UI")

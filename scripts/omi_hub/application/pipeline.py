@@ -12,6 +12,7 @@ from omi_hub.domain import findings
 from omi_hub.domain.errors import RuleError
 from omi_hub.domain.planning import AC_TYPES, pick_next, validate_plan
 from omi_hub.domain.progress import resume_step
+from omi_hub.domain.rework import DEFAULT_CI_INFRA, infra_reason
 from omi_hub.domain.render import filter_diff, pr_title, render_context, render_plan, render_pr_body, tail
 from omi_hub.domain.security import DEFAULT_SECURITY, needs_security
 from omi_hub.domain.templates import check_pr, sections
@@ -201,14 +202,18 @@ def submit(cfg, wf, n, done=None):
 
 def qa(cfg, wf, n):
     s = items.snapshot(cfg, n)
-    if s["status"] == "In Review":
-        items.move(cfg, wf, n, "In QA")
-    elif s["status"] != "In QA":
+    if s["status"] not in ("In Review", "In QA"):
         raise RuleError(f"#{n} phải ở In Review/In QA (hiện: {s['status']})")
     pr = _open_pr(s)
     if pr is None:
         raise RuleError(f"#{n} không có PR mở")
     ok, out = gh.pr_checks(cfg, pr)
+    infra = None if ok is not False else infra_reason(out, cfg.get("ci_infra_patterns", DEFAULT_CI_INFRA))
+    if infra:  # lỗi hạ tầng CI: không rework, giữ nguyên status
+        print(f"QA INFRA {infra}")
+        return 1
+    if s["status"] == "In Review":
+        items.move(cfg, wf, n, "In QA")
     why = "CI"
     if ok is None:  # không có CI: chạy test cục bộ; có CI thì không chạy trùng
         test = cfg.get("commands", {}).get("test")
