@@ -47,6 +47,21 @@ class TestApply(unittest.TestCase):
         self.assertEqual(calls, [("Functional Requirement", 7, None, "E001.F001", None), ("Task", 101, None, "E001.F001.T001", None)])
         self.assertEqual(keys["E001"], 7)
 
+    def test_ac149_1_approve_moves_existing_drafts_top_down(self):
+        existing = {"E001": {"number": 7, "title": "[Epic] Quản lý đơn hàng"},
+                    "E001.F001": {"number": 8, "title": "[Functional Requirement] Khách hàng có thể đặt hàng"},
+                    "E001.F001.T001": {"number": 9, "title": "[Task] Thêm API đặt hàng"}}
+        status = {7: "Approved", 8: "Draft", 9: "Draft"}  # Epic đã duyệt trước → giữ nguyên
+        with mock.patch.object(items, "snapshot", side_effect=lambda c, n: {"status": status[n]}), \
+                mock.patch.object(items, "move") as mv:
+            calls, keys = self.run_apply(existing, approve=True)
+        self.assertEqual(calls, [])
+        self.assertEqual(mv.call_args_list, [mock.call({}, WF, 8, "Approved"), mock.call({}, WF, 9, "Ready")])
+        with mock.patch.object(items, "snapshot") as sn, mock.patch.object(items, "move") as mv:
+            self.run_apply(existing, approve=False)  # không --approve: không đụng trạng thái
+        sn.assert_not_called()
+        mv.assert_not_called()
+
     def test_key_of_other_issue_rejected_before_creating(self):
         with self.assertRaisesRegex(RuleError, "key E001 đã là #1"):
             self.run_apply({"E001": {"number": 1, "title": "[Epic] Plan cũ"}}, approve=True)
