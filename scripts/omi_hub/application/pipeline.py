@@ -348,10 +348,22 @@ def carry(cfg, wf, nums):
         print(f"CARRY #{n} → finding #{p}{'' if ok else ' (đã có, bỏ trùng)'}")
 
 
-def review_done(cfg, wf, n, fail=None, improve=()):
+def review_done(cfg, wf, n, fail=None, improve=(), override=None):
     """Ghi nhận review 1 lượt SAU khi reviewer trả kết quả (resume dựa vào marker này); FAIL → rework."""
+    if fail and override:
+        raise RuleError("--fail và --override loại trừ nhau")
+    if override is not None and not override.strip():
+        raise RuleError("--override cần lý do bác BLOCKER")
     if improve:
         add_findings(cfg, n, improve)
+    if override:  # BLOCKER của reviewer sai: PASS kèm lý do, ghi cả issue lẫn PR để người xem lại được
+        note = f"🔎 Review 1 lượt: PASS (bác BLOCKER) — {override}"
+        gh.comment(cfg, n, f"<!-- omi:reviewed -->\n{note}")
+        pr = _open_pr(gh.issue_snapshot(cfg, n))
+        if pr:
+            gh.comment(cfg, pr, note)
+        print(f"REVIEWED #{n} PASS (override)")
+        return
     gh.comment(cfg, n, f"<!-- omi:reviewed -->\n🔎 Review 1 lượt: {'FAIL — ' + fail if fail else 'PASS'}")
     if fail:
         items.rework(cfg, wf, n, f"Review: {fail}")
