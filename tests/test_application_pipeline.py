@@ -321,6 +321,15 @@ class TestPipeline(unittest.TestCase):
             self.assertEqual(pipeline.check(dict(self.cfg, commands={"lint": "L"})), 0)
         pr.assert_called_once_with("CHECK WARN: chưa cấu hình commands.test")
 
+    def test_bug210_check_prefers_quick_check_cmd(self):
+        with mock.patch.object(pipeline, "run_cmd", return_value=(0, "")) as rc, mock.patch("builtins.print") as pr:
+            self.assertEqual(pipeline.check(dict(self.cfg, commands={"lint": "L", "test": "FULL", "check": "QUICK"})), 0)
+        self.assertEqual([c.args[0] for c in rc.call_args_list], ["L", "QUICK"])  # không chạy bộ test đầy đủ
+        pr.assert_called_once_with("CHECK PASS")
+        with mock.patch.object(pipeline, "run_cmd", return_value=(0, "")) as rc, mock.patch("builtins.print"):
+            pipeline.check(dict(self.cfg, commands={"test": "FULL"}))
+        self.assertEqual([c.args[0] for c in rc.call_args_list], ["FULL"])
+
     def test_ac132_3_submit_first_time_prints_one_review_line(self):
         self.checked()
         self.g.add(2, "Functional Requirement", "In Progress")
