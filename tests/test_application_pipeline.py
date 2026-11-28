@@ -218,9 +218,29 @@ class TestPipeline(unittest.TestCase):
         self.g.add(2, "User Story", "In Progress")
         self.g.add(3, "Task", "In Progress", parent=2, prs=[dict(OPEN_PR)])
         self.g.notes[3] = ["<!-- omi:reviewed -->"]
-        with mock.patch.object(pipeline, "run_cmd", return_value=(0, "")):
+        with mock.patch.object(pipeline, "run_cmd", return_value=(0, "3-x")):
             self.assertEqual(pipeline.submit(self.cfg, WF, 3), (50, []))
         self.assertEqual(self.st(3), "In Review")
+
+    def test_bug191_submit_rejects_wrong_branch_or_foreign_closing_commit(self):
+        self.g.add(2, "Functional Requirement", "In Progress")
+        self.g.add(232, "Task", "In Progress", parent=2)
+        self.g.add(388, "Task", "In Progress", parent=2)
+
+        def git(head, msgs=""):
+            def run(cmd, cwd=None):
+                assert cmd[:2] != ["git", "push"], "không được push"
+                return 0, msgs if cmd[:2] == ["git", "log"] else head
+            return run
+        for head in ("388-ui-date", "omi/2320-x", "main"):
+            with mock.patch.object(pipeline, "run_cmd", side_effect=git(head)):
+                with self.assertRaisesRegex(RuleError, f"'{head}' không phải nhánh của #232"):
+                    pipeline.submit(self.cfg, WF, 232)
+        self.g.branches[232] = ["feature/date"]  # nhánh liên kết bằng gh issue develop, tên tuỳ ý
+        with mock.patch.object(pipeline, "run_cmd", side_effect=git("feature/date", "#232: x\n\nCloses #388\nFixes #232")):
+            with self.assertRaisesRegex(RuleError, "đóng issue khác: #388"):
+                pipeline.submit(self.cfg, WF, 232)
+        self.assertEqual((self.st(232), self.st(388), self.g.created), ("In Progress", "In Progress", 0))
 
     def test_ac132_1_check_warns_without_test_cmd(self):
         with mock.patch.object(pipeline, "run_cmd", return_value=(0, "")), mock.patch("builtins.print") as pr:
@@ -320,7 +340,10 @@ class TestPipeline(unittest.TestCase):
         self.g.notes[1] = ["<!-- omi:findings -->\n\n- [ ] Dọn config (từ #8)"]
         self.g.notes[2] = ["<!-- omi:findings -->\n\n- [ ] Tách hàm (từ #4)\n- [ ] Đặt tên (từ #4)"]
         before = {k: list(v) for k, v in self.g.notes.items()}
-        with mock.patch.object(pipeline, "run_cmd", side_effect=AssertionError("không được push")):
+        def no_push(cmd, cwd=None):
+            assert cmd[:2] != ["git", "push"], "không được push"
+            return 0, "3-x"
+        with mock.patch.object(pipeline, "run_cmd", side_effect=no_push):
             with self.assertRaisesRegex(RuleError, "2.9"):
                 pipeline.submit(self.cfg, WF, 3, "2.1,2.9")
         self.assertEqual(self.g.notes, before)  # mã sai → không sửa gì
