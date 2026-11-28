@@ -412,7 +412,7 @@ class TestPipeline(unittest.TestCase):
         f = self.T.parent / "HANDOFF.md"
         f.write_text(hd.put_block("# HANDOFF\n", hd.WIP, "- Task: #3 · bước: code\n" + hd.INTENT + "sửa parser"),
                      encoding="utf-8")
-        with mock.patch.object(pipeline, "run_cmd", return_value=(0, " M a.py")), mock.patch("builtins.print") as pr:
+        with mock.patch.object(pipeline, "run_cmd", side_effect=lambda cmd, cwd=None: (0, "3-x" if "rev-parse" in cmd else " M a.py")), mock.patch("builtins.print") as pr:
             self.assertEqual(pipeline.resume(self.cfg, WF), "code")
         out = "\n".join(str(c.args[0]) for c in pr.call_args_list if c.args)
         self.assertIn("## Checkpoint phiên trước\n- Task: #3 · bước: code\n- Ý định: sửa parser", out)
@@ -420,6 +420,19 @@ class TestPipeline(unittest.TestCase):
         with mock.patch.object(pipeline, "run_cmd", return_value=(0, "")), mock.patch("builtins.print"):
             self.assertEqual(pipeline.resume(self.cfg, WF), "next")
         self.assertIsNone(hd.get_block(f.read_text(encoding="utf-8"), hd.WIP))
+
+    def test_bug195_resume_on_other_branch_asks_checkout(self):
+        self.g.add(2, "Functional Requirement", "In Progress")
+        self.g.add(455, "Task", "In Progress", parent=2)
+        self.T.mkdir(parents=True)
+        (self.T / "current").write_text("455", encoding="utf-8")
+        run = lambda cmd, cwd=None: (0, "211-api" if "rev-parse" in cmd else "3")  # nhánh #211 có 3 commit
+        with mock.patch.object(pipeline, "run_cmd", side_effect=run), mock.patch("builtins.print") as pr:
+            self.assertEqual(pipeline.resume(self.cfg, WF), "branch")
+        self.assertIn("RESUME #455 status=In Progress step=branch branch=211-api", pr.call_args_list[0].args[0])
+        run = lambda cmd, cwd=None: (0, "455-x" if "rev-parse" in cmd else "0")
+        with mock.patch.object(pipeline, "run_cmd", side_effect=run), mock.patch("builtins.print"):
+            self.assertEqual(pipeline.resume(self.cfg, WF), "code")
 
     def test_resume_after_crash_before_review(self):
         self.g.add(2, "User Story", "In Progress")

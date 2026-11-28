@@ -38,6 +38,7 @@ class TestStatusResume(unittest.TestCase):
         self.assertEqual(rs("In Progress", True, 0, False, False)[0], "code")
         self.assertEqual(rs("In Progress", False, 0, False, False)[0], "code")
         self.assertEqual(rs("In Progress", False, 2, False, False)[0], "submit")
+        self.assertEqual(rs("In Progress", False, 0, False, False, on_branch=False)[0], "branch")  # bug #195
         self.assertEqual(rs("In Review", False, 2, False, True)[0], "review")
         self.assertIn("submit", rs("In Review", False, 2, False, False)[1])  # mất gói review → submit lại
         self.assertEqual(rs("In Review", False, 2, True, True)[0], "qa")
