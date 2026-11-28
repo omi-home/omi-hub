@@ -229,6 +229,22 @@ class TestPipeline(unittest.TestCase):
                 pipeline.submit(self.cfg, WF, 3)
         self.assertEqual((self.st(3), self.g.created), ("In Progress", 0))
 
+    def test_bug192_long_diff_rest_goes_to_second_file(self):
+        self.checked()
+        self.g.add(2, "Functional Requirement", "In Progress")
+        self.g.add(3, "Task", "In Progress", parent=2)
+        self.g.pr_diff = lambda cfg, pr: "\n".join(
+            ["diff --git a/date.tsx b/date.tsx", *["+d"] * 60, "diff --git a/field.tsx b/field.tsx", "+f",
+             "diff --git a/theme.css b/theme.css", "+t"])
+        with mock.patch.object(pipeline, "run_cmd", return_value=(0, "3-x")), mock.patch("builtins.print"):
+            pipeline.submit(dict(self.cfg, review_max_diff_lines=50), WF, 3)
+        pack = (self.T / "review-3.md").read_text(encoding="utf-8")
+        rest = (self.T / "review-3-rest.md").read_text(encoding="utf-8")
+        self.assertIn("⚠️ DIFF CHƯA HẾT: gói có 50/65 dòng. Phần còn lại (file: date.tsx, field.tsx, theme.css)", pack)
+        self.assertIn("review-3-rest.md", pack)
+        self.assertEqual(rest.count("+d"), 11)
+        self.assertIn("diff --git a/theme.css b/theme.css\n+t", rest)
+
     def test_ac63_1_submit_waits_for_pr_link(self):
         self.checked()
         self.g.add(2, "User Story", "In Progress")
@@ -555,7 +571,7 @@ class TestPipeline(unittest.TestCase):
         self.g.notes[3] = ["<!-- omi:reviewed -->"]
         self.g.add(4, "Task", "Ready", parent=2)
         self.T.mkdir(parents=True)
-        for f in ("review-3.md", "qa-3.log", "review-4.md", "qa-4.log", "review-5.md"):
+        for f in ("review-3.md", "review-3-rest.md", "qa-3.log", "review-4.md", "qa-4.log", "review-5.md"):
             (self.T / f).write_text("x", encoding="utf-8")
         with mock.patch.object(pipeline, "run_cmd", return_value=(0, "")), mock.patch("builtins.print") as pr:
             self.assertEqual(pipeline.qa(self.cfg, WF, 3), 0)

@@ -84,7 +84,7 @@ def escalate_findings(cfg, wf, snap):
 
 def task_files(n):
     """File tạm của task n trong .omi/tmp."""
-    return (f"review-{n}.md", f"qa-{n}.log")
+    return (f"review-{n}.md", f"review-{n}-rest.md", f"qa-{n}.log")
 
 
 def clear_current(cfg, n):

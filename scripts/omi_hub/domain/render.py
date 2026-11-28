@@ -21,6 +21,18 @@ def filter_diff(diff_lines):
     return kept, dropped
 
 
+def split_diff(diff, limit):
+    """(phần trong gói, phần còn lại, file có dòng nằm ở phần còn lại)."""
+    shown, rest = diff[:limit], diff[limit:]
+    cut, name = [], None
+    for i, line in enumerate(diff):
+        if line.startswith("diff --git "):
+            name = line.rsplit(" b/", 1)[-1]
+        if i >= limit and name and name not in cut:
+            cut.append(name)
+    return shown, rest, cut
+
+
 def tail(text, n=60):
     return "\n".join((text or "").rstrip().splitlines()[-n:])
 
