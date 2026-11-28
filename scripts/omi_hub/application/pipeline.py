@@ -177,6 +177,7 @@ def _check_branch(cfg, n, base):
     head, ok = task_branch(cfg, n)
     if not ok:
         raise RuleError(f"Nhánh hiện tại '{head}' không phải nhánh của #{n} — `start {n}` để checkout đúng nhánh")
+    run_cmd(["git", "fetch", "origin", base.removeprefix("origin/")], cwd=repo_dir(cfg))  # base cũ → lẫn commit đã merge
     _, msgs = run_cmd(["git", "log", "--format=%B", f"{base}..HEAD"], cwd=repo_dir(cfg))
     other = sorted({int(m) for m in CLOSING.findall(msgs)} - {n})
     if other:
@@ -353,12 +354,14 @@ def resume(cfg, wf):
     _, dirty = run_cmd(["git", "status", "--porcelain"], cwd=rd)
     _, ahead = run_cmd(["git", "rev-list", "--count", f"{base}..HEAD"], cwd=rd)
     reviewed = find_marker(gh.comments(cfg, n), "reviewed") is not None
+    head, on_branch = task_branch(cfg, n) if s["status"] == "In Progress" else ("", True)
     step, hint = resume_step(s["status"], bool(dirty.strip()), int(ahead.strip()) if ahead.strip().isdigit() else 0,
-                             reviewed, (tmp_dir(cfg) / f"review-{n}.md").exists())
+                             reviewed, (tmp_dir(cfg) / f"review-{n}.md").exists(), on_branch)
     if step == "next":
         cur.unlink(missing_ok=True)
         handoff.clear_wip(cfg)
-    print(f"RESUME #{n} status={s['status']} step={step}\n{hint.replace('<n>', str(n))}")
+    print(f"RESUME #{n} status={s['status']} step={step}" + (f" branch={head}" if not on_branch else "")
+          + f"\n{hint.replace('<n>', str(n))}")
     wip = handoff.wip_text(cfg) if step != "next" else None
     if wip:
         print(f"\n## Checkpoint phiên trước\n{wip}")

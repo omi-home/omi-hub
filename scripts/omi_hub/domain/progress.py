@@ -48,7 +48,7 @@ def render_status(wf, items, milestone=None, findings=None):
     return "\n".join(lines)
 
 
-def resume_step(status, dirty, ahead, reviewed, pack_exists):
+def resume_step(status, dirty, ahead, reviewed, pack_exists, on_branch=True):
     """Bước tiếp theo của task dở, suy ra thuần từ trạng thái (GitHub + git + .omi/tmp)."""
     if status in (None, "Done", "Cancelled"):
         return "next", "Task đã kết thúc → `start` lấy task tiếp."
@@ -59,6 +59,8 @@ def resume_step(status, dirty, ahead, reviewed, pack_exists):
     if status in ("Draft", "Triage", "Approved", "Ready"):
         return "start", "Chưa bắt đầu → `start`."
     if status == "In Progress":
+        if not on_branch:  # dirty/ahead của nhánh khác không nói gì về task này
+            return "branch", "Đang đứng nhánh khác, không phải nhánh của task → `start <n>` (checkout nhánh task) rồi `resume`."
         if dirty or ahead == 0:
             return "code", "Đang viết code: xem `git diff --stat`, làm tiếp → `check` → commit → `submit`."
         return "submit", "Code đã commit → `check` → `submit`."
