@@ -1,4 +1,6 @@
 """Use case vòng đời work item: new, move, rework, block, unblock + rollup lên parent."""
+import time
+
 from omi_hub.application.workspace import tmp_dir
 from omi_hub.config import load_templates
 from omi_hub.domain import findings
@@ -10,6 +12,8 @@ from omi_hub.domain.rework import rework as rework_status
 from omi_hub.domain.templates import check_template, replace_section, with_prefix
 from omi_hub.domain.text import affected, build_body, find_marker
 from omi_hub.infrastructure.github import gateway as gh
+
+STATUS_WAIT = (2, 4, 8)  # giây: workflow "Item closed" của Project set Done bất đồng bộ sau khi đóng issue
 
 
 def snapshot(cfg, n):
@@ -30,16 +34,30 @@ def apply_status(cfg, wf, snap, target, reason=None):
         gh.comment(cfg, n, f"✅ Unblocked → {target}")
     elif reason:
         gh.comment(cfg, n, f"**{snap['status']} → {target}**: {reason}")
-    gh.set_field(cfg, snap["item_id"], "Status", target)
-    if is_terminal(wf, target) and snap["state"] == "OPEN":
+    closing = is_terminal(wf, target) and snap["state"] == "OPEN"
+    if closing:  # đóng trước rồi mới set Status, để workflow "Item closed" (→ Done) không đè lên sau
         gh.close(cfg, n, "completed" if target == "Done" else "not_planned")
         snap["state"] = "CLOSED"
+    gh.set_field(cfg, snap["item_id"], "Status", target)
+    if closing and target != "Done":
+        keep_status(cfg, snap, target)
     print(f"#{n} {snap['type']}: {snap['status']} → {target}")
     snap["status"] = target
     if target in ("In QA", "Done"):
         escalate_findings(cfg, wf, snap)
     if is_terminal(wf, target):
         after_terminal(cfg, wf, snap)
+
+
+def keep_status(cfg, snap, target):
+    """Workflow Project chạy trễ có thể đổi Status thành Done sau khi ta set → đọc lại và set lại."""
+    for delay in STATUS_WAIT:
+        time.sleep(delay)
+        if gh.issue_snapshot(cfg, snap["number"])["status"] != target:
+            gh.set_field(cfg, snap["item_id"], "Status", target)
+    if gh.issue_snapshot(cfg, snap["number"])["status"] != target:
+        print(f"STATUS WARN #{snap['number']}: workflow Project vẫn đổi Status khác '{target}' — tắt workflow"
+              " \"Item closed\" của Project hoặc `move` lại")
 
 
 def escalate_findings(cfg, wf, snap):
@@ -249,6 +267,9 @@ def block(cfg, wf, n, reason=None, by=None):
     snap = snapshot(cfg, n)
     if by:
         gh.add_blocked_by(cfg, n, gh.issue_db_id(cfg, by))
+        if snap["status"] == wf["types"][snap["type"]]["initial"]:  # chưa duyệt: chỉ ghi quan hệ, duyệt sau tự vào Waiting
+            print(f"#{n} ({snap['status']}) thêm blocker #{by}; khi duyệt sẽ vào {WAITING}")
+            return snap["status"]
         if snap["status"] == WAITING:
             print(f"#{n} đã ở {WAITING}, thêm blocker #{by}")
             return WAITING

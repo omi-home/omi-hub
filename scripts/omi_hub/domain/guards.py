@@ -9,7 +9,8 @@ GUARDS = {
     "reason": lambda s, r: (_has_reason(r), "Cần --reason"),
     "parent_ready": lambda s, r: (
         bool(s["parent"]) and s["parent"]["status"] in ("Approved", "In Progress"),
-        "Parent phải ở Approved hoặc In Progress"),
+        "Parent phải ở Approved hoặc In Progress (parent đã Done/Cancelled → tạo Bug `--affects <parent>`"
+        " hoặc Change Request thay vì Task mới)"),
     "no_open_blockers": lambda s, r: (
         s["open_blockers"] == 0, f"Còn {s['open_blockers']} issue blocked-by đang mở"),
     "has_open_blockers": lambda s, r: (s["open_blockers"] > 0, "Waiting cần ít nhất 1 issue blocked-by đang mở"),
