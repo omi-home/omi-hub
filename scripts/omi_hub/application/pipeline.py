@@ -98,8 +98,23 @@ def done_findings(cfg, s, raw):
     for p, idx in want.items():
         cid, its = have[p]
         gh.upsert_comment(cfg, p, cid, findings.render(findings.mark(its, idx, f"xong ở #{s['number']}")))
-    if want:
-        print(f"FINDINGS xong: {raw}")
+        for i in sorted(idx):  # in kèm nội dung để thấy ngay mã bị đánh nhầm
+            print(f"FINDING xong [{p}.{i}] {its[i - 1][1]}")
+
+
+def reopen_findings(cfg, raw):
+    """Mở lại finding bị `submit --findings` đánh dấu xong nhầm."""
+    want = findings.parse_codes(raw)
+    for p, idx in want.items():
+        cid, body = gh.marked_comment(cfg, p, findings.NAME)
+        its = findings.parse(body)
+        bad = [f"{p}.{i}" for i in sorted(idx) if i > len(its) or not its[i - 1][0]]
+        if bad:
+            raise RuleError(f"Mã finding không tồn tại/chưa xong: {', '.join(bad)}")
+        its = findings.reopen(its, idx)
+        gh.upsert_comment(cfg, p, cid, findings.render(its))
+        for i in sorted(idx):
+            print(f"FINDING mở lại [{p}.{i}] {its[i - 1][1]}")
 
 
 def start(cfg, wf, n=None):

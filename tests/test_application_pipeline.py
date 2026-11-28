@@ -401,6 +401,28 @@ class TestPipeline(unittest.TestCase):
         self.assertIn("- [ ] Tách hàm (từ #4)\n- [x] Đặt tên (từ #4) (xong ở #3)", self.g.notes[2][0])
         self.assertIn("- [x] Dọn config (từ #8) (xong ở #3)", self.g.notes[1][0])
 
+    def test_bug189_two_digit_codes_exact_and_reopen(self):
+        self.g.add(2, "Functional Requirement", "In Progress")
+        self.g.add(3, "Task", "In Progress", parent=2)
+        self.g.notes[2] = ["<!-- omi:findings -->\n\n" + "\n".join(f"- [ ] F{i} (từ #4)" for i in range(1, 11))]
+        with mock.patch("builtins.print") as pr:
+            pipeline.done_findings(self.cfg, self.g.issue_snapshot(self.cfg, 3), "2.10")
+        self.assertIn(mock.call("FINDING xong [2.10] F10 (từ #4)"), pr.call_args_list)
+        self.assertIn("- [ ] F1 (từ #4)\n", self.g.notes[2][0])
+        self.assertIn("- [x] F10 (từ #4) (xong ở #3)", self.g.notes[2][0])
+        with mock.patch("builtins.print"):
+            pipeline.reopen_findings(self.cfg, "2.10")
+        self.assertIn("- [ ] F10 (từ #4)", self.g.notes[2][0])
+        self.assertNotIn("xong ở", self.g.notes[2][0])
+        with self.assertRaisesRegex(RuleError, "2.1, 2.11"):
+            pipeline.reopen_findings(self.cfg, "2.1,2.11")
+
+    def test_bug189_cli_findings_kept_as_text(self):
+        from omi_hub.cli import main as cli
+        a = cli.build_parser().parse_args(["submit", "3", "--findings", "427.2,173.7,173.10"])
+        self.assertEqual(a.findings, "427.2,173.7,173.10")
+        self.assertEqual(cli.build_parser().parse_args(["finding-reopen", "173.10"]).codes, "173.10")
+
     def test_ac122_4_findings_escalate_then_epic_reports_open(self):
         self.g.add(1, "Epic", "In Progress")
         self.g.add(2, "Functional Requirement", "In Progress", parent=1)

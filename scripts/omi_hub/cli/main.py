@@ -87,7 +87,9 @@ def build_parser():
     p.add_argument("numbers", type=_num, nargs="+")
     p = sub.add_parser("submit")
     p.add_argument("number", type=_num)
-    p.add_argument("--findings", help="mã <p>.<i>,... đã làm trong task này")
+    p.add_argument("--findings", help='mã "<p>.<i>,..." đã làm trong task này (đặt trong ngoặc kép)')
+    p = sub.add_parser("finding-reopen", help="mở lại finding bị đánh dấu xong nhầm")
+    p.add_argument("codes", help='"<p>.<i>,..."')
     for name in ("context", "qa", "accept", "pr-lint"):
         sub.add_parser(name).add_argument("number", type=_num)
     p = sub.add_parser("start")
@@ -148,6 +150,8 @@ def run(a, wf):
         pipeline.carry(cfg, wf, a.numbers)
     elif a.cmd == "submit":
         pipeline.submit(cfg, wf, a.number, a.findings)
+    elif a.cmd == "finding-reopen":
+        pipeline.reopen_findings(cfg, a.codes)
     elif a.cmd == "impact":
         pipeline.impact(cfg, a.number, a.post)
     elif a.cmd == "status":
