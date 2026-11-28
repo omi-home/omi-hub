@@ -64,6 +64,7 @@
         {"from": "Waiting", "to": "Ready", "guards": ["no_open_blockers"]},
         {"from": "Ready", "to": "In Progress", "guards": ["no_open_blockers"]},
         {"from": "In Progress", "to": "In Review", "guards": ["pr_open"]},
+        {"from": "In Progress", "to": "Ready", "guards": ["reason"]},
         {"from": "In Review", "to": "In QA"},
         {"from": "In QA", "to": "Done", "guards": ["pr_merged"]},
         {"from": ["Draft", "Waiting", "Ready", "In Progress"], "to": "Cancelled", "guards": ["reason"]}
@@ -79,6 +80,7 @@
         {"from": "Triage", "to": "Cancelled", "guards": ["reason"]},
         {"from": "Ready", "to": "In Progress", "guards": ["no_open_blockers"]},
         {"from": "In Progress", "to": "In Review", "guards": ["pr_open"]},
+        {"from": "In Progress", "to": "Ready", "guards": ["reason"]},
         {"from": "In Review", "to": "In QA"},
         {"from": "In QA", "to": "Done", "guards": ["pr_merged"]},
         {"from": ["Waiting", "Ready", "In Progress"], "to": "Cancelled", "guards": ["reason"]}
