@@ -69,13 +69,18 @@ def task_files(n):
     return (f"review-{n}.md", f"qa-{n}.log")
 
 
+def clear_current(cfg, n):
+    """n là task đang làm (.omi/tmp/current) → bỏ current."""
+    cur = tmp_dir(cfg) / "current"
+    if cfg.get("_root") and cur.exists() and cur.read_text(encoding="utf-8").strip() == str(n):
+        cur.unlink()
+
+
 def after_terminal(cfg, wf, snap):
     if cfg.get("_root"):  # Done/Cancelled: dọn file tạm của task; là task đang làm → bỏ current (checkpoint wip do handoff dọn)
         for f in task_files(snap["number"]):
             (tmp_dir(cfg) / f).unlink(missing_ok=True)
-        cur = tmp_dir(cfg) / "current"
-        if cur.exists() and cur.read_text(encoding="utf-8").strip() == str(snap["number"]):
-            cur.unlink()
+        clear_current(cfg, snap["number"])
     release_dependents(cfg, wf, snap["number"])
     if snap.get("milestone") and gh.milestone_open_issues(cfg, snap["milestone"]) == 0:
         print(f"MILESTONE {snap['milestone']} sẵn sàng release")  # spec §4.6: báo, không tự đóng milestone
@@ -217,7 +222,10 @@ def move(cfg, wf, n, target, reason=None):
         raise RuleError(errs)
     if target == "In Progress" and snap["status"] != BLOCKED:
         gh.assign_self(cfg, n)
+    started = snap["status"] == "In Progress"
     apply_status(cfg, wf, snap, target, reason)
+    if started and target == "Ready":  # hoàn tác start nhầm
+        clear_current(cfg, n)
     rollup_up(cfg, wf, snap, target)
     return target  # có thể khác target yêu cầu (Ready → Waiting khi còn blocker mở)
 

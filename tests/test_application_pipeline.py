@@ -97,6 +97,24 @@ class TestPipeline(unittest.TestCase):
         self.assertEqual(self.g.developed, [3])
         self.assertEqual((self.T / "current").read_text(encoding="utf-8"), "3")
 
+    def test_bug190_start_without_arg_keeps_current_task_and_can_undo(self):
+        self.g.add(2, "Functional Requirement", "Approved")
+        self.g.add(3, "Task", "Ready", parent=2)
+        self.g.add(4, "Task", "Ready", parent=2)
+        self.g.project_items = lambda cfg: [dict(i, blockers=[], priority="P1", milestone_due=None)
+                                            for i in self.g.issues.values()]
+        with mock.patch("builtins.print"):
+            first = pipeline.start(self.cfg, WF)
+        with mock.patch("builtins.print") as pr:
+            self.assertEqual(pipeline.start(self.cfg, WF), first)  # lần 2: không lấy thêm task
+        self.assertIn(f"ĐANG LÀM #{first} (In Progress)", pr.call_args.args[0])
+        self.assertEqual(sorted(i["status"] for i in self.g.issues.values() if i["type"] == "Task"),
+                         ["In Progress", "Ready"])
+        with mock.patch("builtins.print"):
+            items.move(self.cfg, WF, first, "Ready", "start nhầm")
+        self.assertEqual(self.st(first), "Ready")
+        self.assertFalse((self.T / "current").exists())
+
     def docs_setup(self, task_refs, story_refs):
         d = Path(self.tmp.name) / "docs"
         d.mkdir()

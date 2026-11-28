@@ -118,6 +118,14 @@ def reopen_findings(cfg, raw):
 
 
 def start(cfg, wf, n=None):
+    cur = tmp_dir(cfg) / "current"
+    if n is None and cur.exists():  # đang có task dở: không lấy thêm task mới
+        c = int(cur.read_text(encoding="utf-8").strip())
+        st = gh.issue_snapshot(cfg, c)["status"]
+        if st in ("In Progress", "In Review", "In QA"):
+            print(f"ĐANG LÀM #{c} ({st}) — `resume` để làm tiếp; bỏ dở: `move {c} Ready --reason \"...\"`"
+                  f" (chỉ khi In Progress); lấy task khác: `start <n>`")
+            return c
     if n is None:
         it = pick_next(wf, gh.project_items(cfg))
         if not it:
