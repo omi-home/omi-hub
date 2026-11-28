@@ -96,6 +96,31 @@ MERGED = [{"number": 99, "state": "MERGED", "merged": True}]
 
 
 class TestFlow(unittest.TestCase):
+    def test_bug194_cancel_survives_project_close_workflow(self):
+        self.g.add(2, "Functional Requirement", "Approved")
+        self.g.add(450, "Task", "Draft", parent=2)
+        set_field, close = self.g.set_field, self.g.close
+        late = []
+        self.g.close = lambda cfg, n, r: (close(cfg, n, r), late.append(n))
+        def snap(cfg, n, orig=self.g.issue_snapshot):  # workflow "Item closed" chạy trễ: set Done sau lần set của ta
+            while late:
+                set_field(cfg, f"I{late.pop()}", "Status", "Done")
+            return orig(cfg, n)
+        self.g.issue_snapshot = snap
+        with mock.patch.object(items, "STATUS_WAIT", (2,)), mock.patch.object(items.time, "sleep"),                 mock.patch("builtins.print"):
+            items.move(CFG, WF, 450, "Cancelled", "không cần")
+        self.assertEqual((self.g.issues[450]["status"], self.g.issues[450]["state"]), ("Cancelled", "CLOSED"))
+
+    def test_bug194_block_by_on_draft_only_links(self):
+        self.g.add(2, "Functional Requirement", "Approved")
+        self.g.add(450, "Task", "Draft", parent=2)
+        self.g.add(454, "Task", "Ready", parent=2)
+        with mock.patch("builtins.print"):
+            self.assertEqual(items.block(CFG, WF, 450, by=454), "Draft")
+        self.assertEqual((self.g.issues[450]["status"], self.g.blockers[450]), ("Draft", [454]))
+        with mock.patch("builtins.print"):
+            self.assertEqual(items.move(CFG, WF, 450, "Ready"), "Waiting")
+
     def setUp(self):
         self.real, self.g = items.gh, FakeGh()
         items.gh = self.g
