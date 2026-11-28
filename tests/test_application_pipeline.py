@@ -297,6 +297,22 @@ class TestPipeline(unittest.TestCase):
             pipeline.qa(self.cfg, WF, 3)
         self.assertEqual((self.st(3), self.g.issues[3]["rework_count"]), ("In Progress", 1))
 
+    def test_bug186_accept_runs_on_fresh_default_branch(self):
+        self.g.add(2, "Functional Requirement", "In QA", body=AC1)
+        calls = []
+        def run(cmd, cwd=None):
+            calls.append(cmd if isinstance(cmd, str) else " ".join(cmd))
+            return 0, "test_ac2_1 ... ok"
+        with mock.patch.object(pipeline, "run_cmd", side_effect=run), mock.patch("builtins.print"):
+            self.assertEqual(pipeline.accept(dict(self.cfg, default_branch="develop"), WF, 2), 0)
+        self.assertEqual(calls, ["git fetch origin develop", "git checkout develop",
+                                 "git merge --ff-only origin/develop", "A 2"])
+        self.g.issues[2]["status"] = "In QA"
+        with mock.patch.object(pipeline, "run_cmd", return_value=(1, "local changes would be overwritten")):
+            with self.assertRaisesRegex(RuleError, "Không cập nhật được nhánh main"):
+                pipeline.accept(self.cfg, WF, 2)
+        self.assertEqual(self.st(2), "In QA")  # không rework vì lỗi git
+
     def test_accept_manual_unticked_stays_in_qa(self):
         self.g.add(2, "User Story", "In QA", body="### Acceptance criteria\n- [ ] [manual] UI")
         self.assertEqual(pipeline.accept(self.cfg, WF, 2), 1)
