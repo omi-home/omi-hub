@@ -249,6 +249,8 @@ def qa(cfg, wf, n):
     if infra:  # lỗi hạ tầng CI: không rework, giữ nguyên status
         print(f"QA INFRA {infra}")
         return 1
+    if find_marker(gh.comments(cfg, n), "reviewed") is None:  # review 1 lượt là bắt buộc trước QA
+        raise RuleError(f"#{n} chưa ghi nhận review — chạy reviewer rồi `review-done {n}` trước `qa`")
     if s["status"] == "In Review":
         items.move(cfg, wf, n, "In QA")
     why = "CI"
@@ -382,11 +384,12 @@ def resume(cfg, wf):
 
 
 def add_findings(cfg, n, texts):
-    """IMPROVE của review #n → comment findings của parent (không tạo issue mới)."""
+    """IMPROVE của review #n → comment findings của parent, Bug không parent → item Affects đầu tiên."""
     s = gh.issue_snapshot(cfg, n)
-    if not s["parent"]:
-        raise RuleError(f"#{n} không có parent để ghi findings")
-    p = s["parent"]["number"]
+    p = s["parent"]["number"] if s["parent"] else next(iter(affected(s["body"])), None)
+    if p is None:  # không có chỗ ghi: không chặn review-done, chỉ báo để người xem
+        print(f"FINDINGS WARN #{n} không có parent/Affects, bỏ {len(texts)} gợi ý: " + " | ".join(texts))
+        return
     cid, body = gh.marked_comment(cfg, p, findings.NAME)
     its, added = findings.parse(body), 0
     for t in texts:
