@@ -1,5 +1,6 @@
 """Use case pipeline một task: context → start → check → submit → qa → accept; impact, plan-show, pr-lint."""
 import json
+import re
 import time
 from pathlib import Path
 
@@ -24,6 +25,7 @@ from omi_hub.infrastructure.shell import run_cmd
 CHECK_STEPS = ("lint", "typecheck", "scan", "test")
 TMP_MAX_AGE = 7 * 86400  # giây; file .omi/tmp cũ hơn bị dọn khi start
 LINK_WAIT = (1, 2, 4, 8)  # giây chờ GitHub liên kết PR mới vào issue (closedByPullRequestsReferences)
+CLOSING = re.compile(r"\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)", re.I)  # từ khoá đóng issue của GitHub
 
 
 def _open_pr(snap):
@@ -163,27 +165,47 @@ def _save_check(cfg, msg):
     (tmp_dir(cfg) / "check-last.txt").write_text(msg, encoding="utf-8")
 
 
+def task_branch(cfg, n):
+    """(nhánh hiện tại, có phải nhánh của task n): tên `n-...` (gh issue develop) hoặc nhánh liên kết với issue."""
+    _, head = run_cmd(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=repo_dir(cfg))
+    head = head.strip()
+    return head, bool(re.search(rf"(?:^|/){n}(?:-|$)", head)) or head in gh.issue_branches(cfg, n)
+
+
+def _check_branch(cfg, n, base):
+    """submit chỉ từ nhánh của n, và commit không đóng issue khác (squash merge giữ body commit)."""
+    head, ok = task_branch(cfg, n)
+    if not ok:
+        raise RuleError(f"Nhánh hiện tại '{head}' không phải nhánh của #{n} — `start {n}` để checkout đúng nhánh")
+    _, msgs = run_cmd(["git", "log", "--format=%B", f"{base}..HEAD"], cwd=repo_dir(cfg))
+    other = sorted({int(m) for m in CLOSING.findall(msgs)} - {n})
+    if other:
+        raise RuleError(f"Commit trên nhánh đóng issue khác: {', '.join(f'#{x}' for x in other)}"
+                        f" — sửa message commit (chỉ `Closes #{n}`)")
+    return head
+
+
 def submit(cfg, wf, n, done=None):
     s = items.snapshot(cfg, n)
     if s["status"] not in ("In Progress", "In Review"):
         raise RuleError(f"#{n} phải ở In Progress/In Review (hiện: {s['status']})")
+    base = f"origin/{cfg.get('default_branch', 'main')}"
+    head = _check_branch(cfg, n, base)
     if done:
         done_findings(cfg, s, done)
     code, out = run_cmd(["git", "push", "-u", "origin", "HEAD"], cwd=repo_dir(cfg))
     if code:
         raise RuleError("git push lỗi:\n" + tail(out, 20))
     parent = gh.issue_snapshot(cfg, s["parent"]["number"]) if s["parent"] else None
-    base = f"origin/{cfg.get('default_branch', 'main')}"
     _, files = run_cmd(["git", "diff", "--name-only", f"{base}...HEAD"], cwd=repo_dir(cfg))
     sec = needs_security(files.split(), s["labels"] + (parent["labels"] if parent else []), parent,
                          cfg.get("security_paths", DEFAULT_SECURITY))
     pr = _open_pr(s)
     if pr is None:
-        _, head = run_cmd(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=repo_dir(cfg))
-        pr = gh.open_pr_for_branch(cfg, head.strip())  # PR đã tạo nhưng issue chưa kịp liên kết → không tạo trùng
+        pr = gh.open_pr_for_branch(cfg, head)  # PR đã tạo nhưng issue chưa kịp liên kết → không tạo trùng
     _, log = run_cmd(["git", "log", "--format=%s", f"{base}..HEAD"], cwd=repo_dir(cfg))
     if pr is None:  # title + body PR theo pr_template.json, do script sinh
-        pr = gh.create_pr(cfg, pr_title(s), render_pr_body(s, parent, log.splitlines(), sec), head.strip())
+        pr = gh.create_pr(cfg, pr_title(s), render_pr_body(s, parent, log.splitlines(), sec), head)
     if s["status"] == "In Progress":
         _wait_linked(cfg, n)  # guard In Review cần PR đã liên kết
         items.move(cfg, wf, n, "In Review")
