@@ -40,6 +40,15 @@ def mark(items, idx, note):
             for i, (done, t) in enumerate(items, 1)]
 
 
+DONE_NOTE = re.compile(r"\s*\(xong ở #\d+\)$")
+
+
+def reopen(items, idx):
+    """Mở lại các dòng (1-based) đã đánh dấu xong nhầm: bỏ `[x]` và ghi chú `(xong ở #n)` cuối dòng."""
+    return [(False, DONE_NOTE.sub("", t)) if i in idx and done else (done, t)
+            for i, (done, t) in enumerate(items, 1)]
+
+
 def parse_codes(raw):
     """'12.1,12.3' → {12: {1, 3}}; RuleError nếu sai dạng."""
     out = {}
