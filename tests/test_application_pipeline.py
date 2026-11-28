@@ -269,6 +269,7 @@ class TestPipeline(unittest.TestCase):
         self.g.add(1, "Epic", "In Progress")
         self.g.add(2, "User Story", "In Progress", parent=1, body=AC1)
         self.g.add(3, "Task", "In Review", parent=2, prs=[dict(OPEN_PR)])
+        self.g.notes[3] = ["<!-- omi:reviewed -->"]
         with mock.patch.object(pipeline, "run_cmd", return_value=(0, "test_ac2_1 ... ok")):
             self.assertEqual(pipeline.qa(self.cfg, WF, 3), 0)
         self.assertEqual((self.st(3), self.st(2), self.st(1)), ("Done", "Done", "Done"))
@@ -277,6 +278,7 @@ class TestPipeline(unittest.TestCase):
     def test_qa_fail_reworks_and_writes_log(self):
         self.g.add(2, "User Story", "In Progress")
         self.g.add(3, "Task", "In Review", parent=2, prs=[dict(OPEN_PR)])
+        self.g.notes[3] = ["<!-- omi:reviewed -->"]
         with mock.patch.object(pipeline, "run_cmd", return_value=(1, "AssertionError: boom")):
             self.assertEqual(pipeline.qa(self.cfg, WF, 3), 1)
         self.assertEqual((self.st(3), self.g.issues[3]["rework_count"]), ("In Progress", 1))
@@ -285,6 +287,7 @@ class TestPipeline(unittest.TestCase):
     def test_ac132_2_qa_ci_infra_error_no_rework(self):
         self.g.add(2, "Functional Requirement", "In Progress")
         self.g.add(3, "Task", "In Review", parent=2, prs=[dict(OPEN_PR)])
+        self.g.notes[3] = ["<!-- omi:reviewed -->"]
         for log in ("pr-lint\tfail\nError: Input required and not supplied: token",
                     "HTTP 502: Bad Gateway (https://api.github.com/graphql)"):
             self.g.pr_checks = lambda cfg, pr, log=log: (False, log)
@@ -412,6 +415,23 @@ class TestPipeline(unittest.TestCase):
         with self.assertRaisesRegex(RuleError, "loại trừ"):
             pipeline.review_done(self.cfg, WF, 3, fail="x", override="y")
 
+    def test_bug187_bug_without_parent_improve_goes_to_affects_and_qa_needs_review(self):
+        self.g.add(2, "Functional Requirement", "Done", state="CLOSED")
+        self.g.add(7, "Bug", "In Review", body="### Affects\n- #2", prs=[dict(OPEN_PR)])
+        self.g.add(8, "Bug", "In Review", prs=[dict(OPEN_PR)])
+        with mock.patch.object(pipeline, "run_cmd", side_effect=AssertionError("chưa review thì không chạy test")):
+            with self.assertRaisesRegex(RuleError, "review-done 7"):
+                pipeline.qa(self.cfg, WF, 7)
+        self.assertEqual(self.st(7), "In Review")
+        with mock.patch("builtins.print") as pr:
+            pipeline.review_done(self.cfg, WF, 7, improve=["Tách hàm parse"])
+            pipeline.review_done(self.cfg, WF, 8, improve=["Đặt tên rõ"])
+        self.assertIn("- [ ] Tách hàm parse (từ #7)", next(c for c in self.g.notes[2] if "omi:findings" in c))
+        self.assertIn("FINDINGS WARN #8", " ".join(str(c) for c in pr.call_args_list))
+        self.assertTrue(any("omi:reviewed" in c for c in self.g.notes[8]))  # vẫn ghi REVIEWED
+        with mock.patch.object(pipeline, "run_cmd", return_value=(0, "")), mock.patch("builtins.print"):
+            self.assertEqual(pipeline.qa(self.cfg, WF, 7), 0)
+
     def test_review_done_fail_marks_and_reworks(self):
         self.g.add(2, "User Story", "In Progress")
         self.g.add(3, "Task", "In Review", parent=2, prs=[dict(OPEN_PR)])
@@ -462,6 +482,7 @@ class TestPipeline(unittest.TestCase):
     def test_ac142_1_done_or_cancelled_removes_task_files(self):
         self.g.add(2, "Functional Requirement", "In Progress")
         self.g.add(3, "Task", "In Review", parent=2, prs=[dict(OPEN_PR)])
+        self.g.notes[3] = ["<!-- omi:reviewed -->"]
         self.g.add(4, "Task", "Ready", parent=2)
         self.T.mkdir(parents=True)
         for f in ("review-3.md", "qa-3.log", "review-4.md", "qa-4.log", "review-5.md"):
@@ -475,6 +496,7 @@ class TestPipeline(unittest.TestCase):
     def test_ac144_4_qa_done_runs_handoff_errors_only_warn(self):
         self.g.add(2, "Functional Requirement", "In Progress", body=AC1)
         self.g.add(3, "Task", "In Review", parent=2, prs=[dict(OPEN_PR)])
+        self.g.notes[3] = ["<!-- omi:reviewed -->"]
         pipeline.handoff.handoff.side_effect = OSError("disk")
         with mock.patch.object(pipeline, "run_cmd", return_value=(0, "test_ac2_1 ... ok")), mock.patch("builtins.print") as pr:
             self.assertEqual(pipeline.qa(self.cfg, WF, 3), 0)
