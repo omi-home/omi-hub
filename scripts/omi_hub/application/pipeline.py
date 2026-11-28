@@ -59,6 +59,12 @@ def doc_context(cfg, bodies):
     return render_refs(found, missing)
 
 
+def review_docs(cfg, bodies):
+    """Docs cho gói review: tham chiếu của task/parent + `review_refs` (mục kiến trúc/quy ước luôn kèm)."""
+    always = "\n".join(f"- {r}" for r in cfg.get("review_refs", []))
+    return doc_context(cfg, bodies + ([f"### Tham chiếu\n{always}"] if always else []))
+
+
 def context(cfg, n):
     s = gh.issue_snapshot(cfg, n)
     parent = gh.issue_snapshot(cfg, s["parent"]["number"]) if s["parent"] else None
@@ -269,6 +275,7 @@ def submit(cfg, wf, n, done=None):
                  "## Check gần nhất\n" + (last.read_text(encoding="utf-8") if last.exists() else "(chưa chạy `check`)"),
                  "## Task anh em còn mở\n" + ("\n".join(sibs) or "(không có)"),
                  "## Findings đã có (không báo lại)\n" + (known or "(không có)"),
+                 *filter(None, [review_docs(cfg, [s["body"]] + ([parent["body"]] if parent else []))]),
                  f"## Diff PR #{pr} ({len(diff)} dòng)"
                  + (f"\nĐã bỏ file sinh/lockfile: {', '.join(dropped)}" if dropped else "")
                  + "\n```diff\n" + "\n".join(shown) + "\n```"

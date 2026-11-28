@@ -125,7 +125,8 @@ def init(wf, milestone=None, from_template=None, template_only=False, hub_repo="
            "project_id": gh.project_node_id(owner, number), "fields": gh.load_fields(owner, number),
            "commands": {**old.get("commands", {}), **{k: v for k, v in new_cmds.items() if v}},
            "security_paths": old.get("security_paths", DEFAULT_SECURITY),
-           "review_max_diff_lines": old.get("review_max_diff_lines", 1500)}
+           "review_max_diff_lines": old.get("review_max_diff_lines", 1500),
+           **{k: old[k] for k in ("ci_infra_patterns", "review_refs") if k in old}}  # tuỳ chọn người dùng tự thêm
     warns = release_flow(cfg, old)
     CONFIG.parent.mkdir(exist_ok=True)
     CONFIG.write_text(json.dumps(cfg, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
