@@ -186,19 +186,31 @@ def _check_branch(cfg, n, base):
     return head
 
 
+def _check_fresh(cfg, files):
+    """submit cần `check` gần nhất PASS/WARN và không file nào của nhánh bị sửa sau lần check đó."""
+    last = tmp_dir(cfg) / "check-last.txt"
+    if not last.exists() or last.read_text(encoding="utf-8").startswith("CHECK FAIL"):
+        raise RuleError("`check` gần nhất chưa chạy hoặc FAIL — sửa tới `CHECK PASS` rồi submit")
+    root, at = Path(repo_dir(cfg)), last.stat().st_mtime
+    newer = [f for f in files if f.strip() and (root / f).is_file() and (root / f).stat().st_mtime > at]
+    if newer:
+        raise RuleError("File sửa sau lần `check` gần nhất: " + ", ".join(newer[:5]) + " — chạy lại `check`")
+
+
 def submit(cfg, wf, n, done=None):
     s = items.snapshot(cfg, n)
     if s["status"] not in ("In Progress", "In Review"):
         raise RuleError(f"#{n} phải ở In Progress/In Review (hiện: {s['status']})")
     base = f"origin/{cfg.get('default_branch', 'main')}"
     head = _check_branch(cfg, n, base)
+    _, files = run_cmd(["git", "diff", "--name-only", f"{base}...HEAD"], cwd=repo_dir(cfg))
+    _check_fresh(cfg, files.splitlines())
     if done:
         done_findings(cfg, s, done)
     code, out = run_cmd(["git", "push", "-u", "origin", "HEAD"], cwd=repo_dir(cfg))
     if code:
         raise RuleError("git push lỗi:\n" + tail(out, 20))
     parent = gh.issue_snapshot(cfg, s["parent"]["number"]) if s["parent"] else None
-    _, files = run_cmd(["git", "diff", "--name-only", f"{base}...HEAD"], cwd=repo_dir(cfg))
     sec = needs_security(files.split(), s["labels"] + (parent["labels"] if parent else []), parent,
                          cfg.get("security_paths", DEFAULT_SECURITY))
     pr = _open_pr(s)

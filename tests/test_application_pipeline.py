@@ -82,6 +82,10 @@ class TestPipeline(unittest.TestCase):
             p.stop()
         self.tmp.cleanup()
 
+    def checked(self, msg="CHECK PASS"):
+        self.T.mkdir(parents=True, exist_ok=True)
+        (self.T / "check-last.txt").write_text(msg, encoding="utf-8")
+
     def st(self, n):
         return self.g.issues[n]["status"]
 
@@ -128,6 +132,7 @@ class TestPipeline(unittest.TestCase):
         self.assertEqual((self.st(3), self.g.developed), ("Waiting", []))
 
     def test_submit_first_time_requests_review_with_security(self):
+        self.checked()
         self.g.add(2, "User Story", "In Progress", body=AC1)
         self.g.add(3, "Task", "In Progress", parent=2)
         def fake_run(cmd, cwd=None):
@@ -159,8 +164,7 @@ class TestPipeline(unittest.TestCase):
             "diff --git a/src/a.py b/src/a.py", "+x = 1",
             "diff --git a/package-lock.json b/package-lock.json", *["+lock"] * 50,
             "diff --git a/web/pnpm-lock.yaml b/web/pnpm-lock.yaml", "+y"])
-        with mock.patch.object(pipeline, "run_cmd", return_value=(1, "boom\nAssertionError: x")), \
-                mock.patch("builtins.print"):
+        with mock.patch.object(pipeline, "run_cmd", return_value=(0, "")), mock.patch("builtins.print"):
             pipeline.check(dict(self.cfg, commands={"test": "T"}))
 
         def fake_run(cmd, cwd=None):
@@ -173,7 +177,7 @@ class TestPipeline(unittest.TestCase):
     def test_ac126_1_pack_has_commits_and_last_check(self):
         pack = self._pack126()
         self.assertIn("## Commit\n- #3: thêm login\n- #3: sửa test", pack)
-        self.assertIn("## Check gần nhất\nCHECK FAIL (test)\nboom\nAssertionError: x", pack)
+        self.assertIn("## Check gần nhất\nCHECK PASS", pack)
 
     def test_ac126_2_pack_has_open_siblings_and_findings(self):
         pack = self._pack126()
@@ -187,7 +191,28 @@ class TestPipeline(unittest.TestCase):
                       pack)  # giới hạn dòng tính trên phần còn lại
         self.assertNotIn("+lock", pack)
 
+    def test_bug185_submit_needs_fresh_passing_check(self):
+        self.g.add(2, "Functional Requirement", "In Progress")
+        self.g.add(3, "Task", "In Progress", parent=2)
+        src = Path(self.tmp.name) / "src.py"
+        run = lambda cmd, cwd=None: (0, "src.py\ngone.py" if cmd[:2] == ["git", "diff"] else "3-x")
+        with mock.patch.object(pipeline, "repo_dir", return_value=self.tmp.name), \
+                mock.patch.object(pipeline, "run_cmd", side_effect=run):
+            with self.assertRaisesRegex(RuleError, "chưa chạy hoặc FAIL"):
+                pipeline.submit(self.cfg, WF, 3)  # chưa check
+            self.checked("CHECK FAIL (test)\nboom")
+            with self.assertRaisesRegex(RuleError, "chưa chạy hoặc FAIL"):
+                pipeline.submit(self.cfg, WF, 3)
+            self.checked()
+            src.write_text("x", encoding="utf-8")
+            later = (self.T / "check-last.txt").stat().st_mtime + 5
+            os.utime(src, (later, later))  # sửa sau review-done --fail mà chưa check lại
+            with self.assertRaisesRegex(RuleError, "sửa sau lần `check` gần nhất: src.py"):
+                pipeline.submit(self.cfg, WF, 3)
+        self.assertEqual((self.st(3), self.g.created), ("In Progress", 0))
+
     def test_ac63_1_submit_waits_for_pr_link(self):
+        self.checked()
         self.g.add(2, "User Story", "In Progress")
         self.g.add(3, "Task", "In Progress", parent=2)
         self.g.link_lag = 3
@@ -197,6 +222,7 @@ class TestPipeline(unittest.TestCase):
         self.assertGreater(sl.call_count, 1)
 
     def test_ac63_1_submit_rerun_no_duplicate_pr(self):
+        self.checked()
         self.g.add(2, "User Story", "In Progress")
         self.g.add(3, "Task", "In Progress", parent=2)
         self.g.branch_prs["omi/3-x"] = 50  # PR đã tạo ở lần trước, issue chưa liên kết
@@ -206,6 +232,7 @@ class TestPipeline(unittest.TestCase):
         self.assertEqual((self.st(3), self.g.created), ("In Review", 0))
 
     def test_submit_gives_up_when_never_linked(self):
+        self.checked()
         self.g.add(2, "User Story", "In Progress")
         self.g.add(3, "Task", "In Progress", parent=2)
         self.g.link_lag = 99
@@ -215,6 +242,7 @@ class TestPipeline(unittest.TestCase):
         self.assertEqual(self.st(3), "In Progress")
 
     def test_submit_after_rework_skips_review(self):
+        self.checked()
         self.g.add(2, "User Story", "In Progress")
         self.g.add(3, "Task", "In Progress", parent=2, prs=[dict(OPEN_PR)])
         self.g.notes[3] = ["<!-- omi:reviewed -->"]
@@ -248,6 +276,7 @@ class TestPipeline(unittest.TestCase):
         pr.assert_called_once_with("CHECK WARN: chưa cấu hình commands.test")
 
     def test_ac132_3_submit_first_time_prints_one_review_line(self):
+        self.checked()
         self.g.add(2, "Functional Requirement", "In Progress")
         self.g.add(3, "Task", "In Progress", parent=2)
         self.g.link_lag = 2
@@ -353,6 +382,7 @@ class TestPipeline(unittest.TestCase):
         self.assertNotIn("Đã làm", text)
 
     def test_ac122_3_submit_findings_marks_done_or_rejects(self):
+        self.checked()
         self.g.add(1, "Epic", "In Progress")
         self.g.add(2, "Functional Requirement", "In Progress", parent=1)
         self.g.add(3, "Task", "In Progress", parent=2)
