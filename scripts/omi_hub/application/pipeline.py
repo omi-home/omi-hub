@@ -285,6 +285,15 @@ def auto_handoff(cfg, wf):
         print(f"HANDOFF WARN: {str(e).splitlines()[0] if str(e) else type(e).__name__}")
 
 
+def sync_main(cfg):
+    """Nghiệm thu chạy trên nhánh chính mới nhất (đã có PR vừa merge), không phải nhánh task/bản local cũ."""
+    b = cfg.get("default_branch", "main")
+    for cmd in (["git", "fetch", "origin", b], ["git", "checkout", b], ["git", "merge", "--ff-only", f"origin/{b}"]):
+        code, out = run_cmd(cmd, cwd=repo_dir(cfg))
+        if code:
+            raise RuleError(f"Không cập nhật được nhánh {b} để nghiệm thu (`{' '.join(cmd)}`):\n{tail(out, 10)}")
+
+
 def accept(cfg, wf, n):
     s = items.snapshot(cfg, n)
     if s["status"] != "In QA":
@@ -297,6 +306,7 @@ def accept(cfg, wf, n):
         cmd = cfg.get("commands", {}).get("accept")
         if not cmd:
             raise RuleError("Chưa cấu hình commands.accept trong .omi/project.json")
+        sync_main(cfg)
         code, out = run_cmd(cmd.format(n=n), cwd=repo_dir(cfg))
     ok, missing = accept_verdict(n, acs, out, code)
     if ok:
