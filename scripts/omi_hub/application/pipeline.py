@@ -14,7 +14,8 @@ from omi_hub.domain.errors import RuleError
 from omi_hub.domain.planning import AC_TYPES, pick_next, validate_plan
 from omi_hub.domain.progress import resume_step
 from omi_hub.domain.rework import DEFAULT_CI_INFRA, infra_reason
-from omi_hub.domain.render import filter_diff, pr_title, render_context, render_plan, render_pr_body, tail
+from omi_hub.domain.render import (filter_diff, pr_title, render_context, render_plan, render_pr_body,
+                                   split_diff, tail)
 from omi_hub.domain.security import DEFAULT_SECURITY, needs_security
 from omi_hub.domain.templates import check_pr, sections
 from omi_hub.domain.text import affected, find_marker
@@ -256,6 +257,13 @@ def submit(cfg, wf, n, done=None):
         sibs = [f"- #{c['number']} {c.get('title') or ''} — {c['status']}" for c in (parent or {}).get("children", [])
                 if c["number"] != n and c["state"] == "OPEN"]
         known = carried_findings(cfg, parent)
+        shown, rest, cut = split_diff(diff, limit)
+        restf = tmp_dir(cfg) / f"review-{n}-rest.md"  # diff dài: phần còn lại sang file riêng, reviewer đọc tiếp
+        if rest:
+            restf.write_text(f"# Diff PR #{pr} — phần còn lại (dòng {limit + 1}–{len(diff)})\n\n```diff\n"
+                             + "\n".join(rest) + "\n```\n", encoding="utf-8")
+        else:
+            restf.unlink(missing_ok=True)
         parts = [render_context(s, parent, [gh.issue_snapshot(cfg, a) for a in affected(s["body"])]),
                  "## Commit\n" + ("\n".join(f"- {x}" for x in log.splitlines() if x.strip()) or "(không có)"),
                  "## Check gần nhất\n" + (last.read_text(encoding="utf-8") if last.exists() else "(chưa chạy `check`)"),
@@ -263,8 +271,9 @@ def submit(cfg, wf, n, done=None):
                  "## Findings đã có (không báo lại)\n" + (known or "(không có)"),
                  f"## Diff PR #{pr} ({len(diff)} dòng)"
                  + (f"\nĐã bỏ file sinh/lockfile: {', '.join(dropped)}" if dropped else "")
-                 + "\n```diff\n" + "\n".join(diff[:limit])
-                 + ("\n... (đã cắt)" if len(diff) > limit else "") + "\n```"]
+                 + "\n```diff\n" + "\n".join(shown) + "\n```"
+                 + (f"\n\n⚠️ DIFF CHƯA HẾT: gói có {len(shown)}/{len(diff)} dòng. Phần còn lại (file: {', '.join(cut)})"
+                    f" ở `{restf.as_posix()}` — PHẢI đọc hết trước khi kết luận." if rest else "")]
         pack.write_text("\n\n".join(parts) + "\n", encoding="utf-8")
         print(f"REVIEW #{n} PR #{pr} pack={pack.as_posix()} reviewers={','.join(reviewers)}")
     else:
