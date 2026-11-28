@@ -245,6 +245,18 @@ class TestPipeline(unittest.TestCase):
         self.assertEqual(rest.count("+d"), 11)
         self.assertIn("diff --git a/theme.css b/theme.css\n+t", rest)
 
+    def test_bug193_pack_has_task_refs_and_review_refs(self):
+        self.checked()
+        self.docs_setup("- docs/spec.md#outbox", "- docs/spec.md#outbox")
+        cfg = dict(self.cfg, review_refs=["docs/spec.md#auth"])
+        with mock.patch.object(pipeline, "repo_dir", return_value=self.tmp.name), \
+                mock.patch.object(pipeline, "run_cmd", return_value=(0, "3-x")), mock.patch("builtins.print"):
+            pipeline.submit(cfg, WF, 3)
+        pack = (self.T / "review-3.md").read_text(encoding="utf-8")
+        self.assertIn("## Tham chiếu docs/spec.md#auth\n## Auth\nJWT ES256", pack)
+        self.assertIn("ghi outbox cùng transaction", pack)
+        self.assertNotIn("không lấy", pack)
+
     def test_ac63_1_submit_waits_for_pr_link(self):
         self.checked()
         self.g.add(2, "User Story", "In Progress")
