@@ -177,6 +177,7 @@ def _check_branch(cfg, n, base):
     head, ok = task_branch(cfg, n)
     if not ok:
         raise RuleError(f"Nhánh hiện tại '{head}' không phải nhánh của #{n} — `start {n}` để checkout đúng nhánh")
+    run_cmd(["git", "fetch", "origin", base.removeprefix("origin/")], cwd=repo_dir(cfg))  # base cũ → lẫn commit đã merge
     _, msgs = run_cmd(["git", "log", "--format=%B", f"{base}..HEAD"], cwd=repo_dir(cfg))
     other = sorted({int(m) for m in CLOSING.findall(msgs)} - {n})
     if other:
