@@ -174,8 +174,10 @@ def prune_tmp(cfg, n, now=None):
 
 
 def check(cfg):
+    cmds = cfg.get("commands", {})
     for step in CHECK_STEPS:
-        cmd = cfg.get("commands", {}).get(step)
+        # commands.check: bản test nhanh cho vòng sửa (phần bị sửa); toàn bộ commands.test để CI/qa chạy
+        cmd = cmds.get("check") or cmds.get("test") if step == "test" else cmds.get(step)
         if cmd:
             code, out = run_cmd(cmd, cwd=repo_dir(cfg))
             if code:
@@ -183,7 +185,7 @@ def check(cfg):
                 _save_check(cfg, msg)
                 print(msg)
                 return 1
-    msg = "CHECK PASS" if cfg.get("commands", {}).get("test") else "CHECK WARN: chưa cấu hình commands.test"
+    msg = "CHECK PASS" if cmds.get("check") or cmds.get("test") else "CHECK WARN: chưa cấu hình commands.test"
     _save_check(cfg, msg)
     print(msg)
     return 0
